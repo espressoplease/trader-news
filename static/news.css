@@ -109,6 +109,10 @@ a:visited { color:#828282; text-decoration:none; }
 .market-company-detail-head { align-items:baseline; display:flex; justify-content:space-between; }
 .market-company-detail-close { background:transparent; border:0; color:#8b7b6c; cursor:pointer; font:8px Verdana, sans-serif; text-decoration:underline; }
 .market-company-detail-meta, .market-company-detail-note { color:#9a8b7c; font-size:8px; margin-top:3px; }
+.market-company-detail-description { color:#555; font-size:8px; line-height:1.35; margin-top:6px; }
+.market-company-detail-links { display:flex; flex-wrap:wrap; gap:4px; margin-top:7px; }
+.market-company-detail-links a { background:#fffaf4; border:1px solid var(--market-border); color:#7d654e; font-size:8px; padding:3px 5px; text-decoration:none; }
+.market-company-detail-links a:hover, .market-company-detail-links a:focus { background:#fff; color:#222; text-decoration:underline; }
 .market-company-detail-metrics { display:grid; gap:5px 8px; grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:7px; }
 .market-company-detail-metric { display:flex; flex-direction:column; gap:1px; }
 .market-company-detail-label { color:#9a8b7c; font-size:7px; text-transform:uppercase; }

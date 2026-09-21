@@ -298,6 +298,10 @@
       ; a UID change cannot blank the whole homepage.
       (and (is i!ip "market-backlog")
            market-backlog-author*)
+      ; Keep the original local seed stories renderable when their temporary
+      ; author UID is no longer present in arc/uids.
+      (and (is i!by 1)
+           market-backlog-author*)
       (err (uid-message i))))
 
 (def uid-message (i)
@@ -780,6 +784,7 @@
        (gen-css-url)
        (gentag link rel "shortcut icon" href favicon-url*)
        (tag (script src (static-src "market-data.js")))
+       (tag (script src (static-src "market-companies.js")))
        (tag (script src (static-src "hn.js")))
        (tag (script src (static-src "market-explorer.js")))
        (tag title (presc ,title)))
@@ -1001,6 +1006,8 @@
             (tag (div id "market-company-detail-name" class "market-detail-title") (pr "Company detail"))
             (tag (button id "market-company-detail-close" class "market-company-detail-close" type "button") (pr "close")))
           (tag (div id "market-company-detail-meta" class "market-company-detail-meta") (pr ""))
+          (tag (div id "market-company-detail-description" class "market-company-detail-description") (pr ""))
+          (tag (div id "market-company-detail-links" class "market-company-detail-links") (pr ""))
           (tag (div id "market-company-detail-metrics" class "market-company-detail-metrics")))
         (tag (div class "market-constituents-card")
           (tag (div class "market-constituents-head")
@@ -1956,7 +1963,9 @@
 ; affecting anyone else.  The hidden ids live in the user's profile.
 
 (def hidden (i (t user me))
-  (and user (mem i!id (uvar user hidden))))
+  ; A stale login cookie can outlive a local profile file. Treat that user as
+  ; having no hidden items instead of letting the homepage fail to render.
+  (and user (profile user) (mem i!id (uvar user hidden))))
 
 (def hide-item (i)
   (pushnew i!id my!hidden)

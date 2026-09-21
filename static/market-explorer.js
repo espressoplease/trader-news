@@ -48,6 +48,19 @@
     if (record.fundamentalsSourceUrl) { var link=document.createElement('a'); link.href=record.fundamentalsSourceUrl; link.target='_blank'; link.rel='noopener noreferrer'; link.textContent=record.fundamentalsSource; meta.appendChild(link); }
     meta.title=fundamentalsTitle(record);
   }
+  function renderCompanyResources(entity) {
+    var description = el('market-company-detail-description'), links = el('market-company-detail-links');
+    if (!description || !links) return;
+    description.textContent = '';
+    links.innerHTML = '';
+    var info = window.FINANCE_COMPANY_INFO ? window.FINANCE_COMPANY_INFO(entity.symbol, entity.companyName || entity.name, entity.marketName || (state.market && state.market.name)) : null;
+    if (!info) return;
+    description.textContent = info.description;
+    [['Yahoo Finance', info.yahooUrl], [info.irLabel, info.irUrl]].forEach(function (item) {
+      var link = document.createElement('a'); link.href = item[1]; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = item[0];
+      links.appendChild(link);
+    });
+  }
   function changeClass(node, value) { if (!node) return; node.className = node.className.replace(/\bis-negative\b/g, ''); if (finite(value) && value < 0) node.className += ' is-negative'; }
   function age(seconds) { if (!finite(seconds)) return 'unknown'; seconds = Math.max(0, Math.round(seconds)); if (seconds < 60) return seconds + 's ago'; if (seconds < 3600) return Math.round(seconds / 60) + 'm ago'; if (seconds < 86400) return Math.round(seconds / 3600) + 'h ago'; return Math.round(seconds / 86400) + 'd ago'; }
   function timestamp(seconds) { return finite(seconds) ? new Date(seconds * 1000).toLocaleString() : 'unknown'; }
@@ -115,7 +128,8 @@
     target.innerHTML = '';
     rows.slice(0, state.limit).forEach(function (row) {
       var node = document.createElement('div'), ident = document.createElement('span'), price = document.createElement('span'), day = document.createElement('span'), period = document.createElement('span'), cap = document.createElement('span'), pe = document.createElement('span'), yieldValue = document.createElement('span'), badge = document.createElement('span');
-      node.className = 'market-constituent'; node.tabIndex = 0; node.title = badgeTitle(row.quote); ident.className = 'market-constituent-ident'; price.className = 'market-constituent-price'; day.className = 'market-constituent-day market-constituent-move'; period.className = 'market-constituent-period market-constituent-move'; cap.className = 'market-constituent-cap'; pe.className = 'market-constituent-pe'; yieldValue.className = 'market-constituent-yield'; badge.className = 'market-row-badge';
+      var info = window.FINANCE_COMPANY_INFO ? window.FINANCE_COMPANY_INFO(row.ticker, row.name, market.name) : null;
+      node.className = 'market-constituent'; node.tabIndex = 0; node.setAttribute('role', 'button'); node.title = info ? info.description + '\nClick for chart, detail, and research links.' : badgeTitle(row.quote); ident.className = 'market-constituent-ident'; price.className = 'market-constituent-price'; day.className = 'market-constituent-day market-constituent-move'; period.className = 'market-constituent-period market-constituent-move'; cap.className = 'market-constituent-cap'; pe.className = 'market-constituent-pe'; yieldValue.className = 'market-constituent-yield'; badge.className = 'market-row-badge';
       ident.textContent = row.ticker + ' ' + row.name; price.textContent = number(row.quote.price) + (finite(row.quote.price) && row.quote.currency ? ' ' + row.quote.currency : ''); day.textContent = percent(row.quote.dayChangePct); period.textContent = percent(row.quote.periodChangePct); cap.textContent = marketCap(row.quote); pe.textContent = peRatio(row.quote); yieldValue.textContent = dividendYield(row.quote); [cap,pe,yieldValue].forEach(function(field) { field.title = fundamentalsTitle(row.quote); }); badge.textContent = badgeText(row.quote); badge.title = badgeTitle(row.quote); changeClass(day, row.quote.dayChangePct); changeClass(period, row.quote.periodChangePct); tone(node, row.move);
       [ident, price, day, period, cap, pe, yieldValue, badge].forEach(function (child) { node.appendChild(child); });
       function select() { loadCompany(row); } node.addEventListener('click', select); node.addEventListener('keydown', function (event) { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); } }); target.appendChild(node);
@@ -136,6 +150,7 @@
       companyPanel.className = companyPanel.className.replace(/\bnoshow\b/g, '') + (entity.type === 'company' ? '' : ' noshow');
       if (entity.type === 'company') {
         text('market-company-detail-name', entity.name);
+        renderCompanyResources(entity);
         renderFundamentals(entity.quote || {});
       }
     }
@@ -156,7 +171,7 @@
     else selectEntity({type:'index', name:market.name, symbol:market.symbol});
     renderRows([]); updateRows(false);
   }
-  function loadCompany(row) { selectEntity({type:'company', name:row.name + ' (' + row.ticker + ')', symbol:row.ticker, quote:row.quote}); }
+  function loadCompany(row) { selectEntity({type:'company', name:row.name + ' (' + row.ticker + ')', companyName:row.name, marketName:state.market && state.market.name, symbol:row.ticker, quote:row.quote}); }
   function createRail() { document.querySelectorAll('.market-index').forEach(function (button) { var market = byKey[button.id.replace('market-', '')]; if (market) button.addEventListener('click', function () { loadMarket(market); }); }); }
   function refresh(fresh) {
     if (!visible) return;
