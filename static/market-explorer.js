@@ -2,7 +2,7 @@
 (function () {
   var markets = window.FINANCE_MARKETS || [];
   var ranges = { '1d':'1D', '5d':'5D', '1mo':'1M', '3mo':'3M', '6mo':'6M', 'ytd':'YTD', '1y':'1Y', '5y':'5Y' };
-  var byKey = {}, state = { market:null, entity:null, range:'1mo', filter:'all', sort:'move', limit:100, token:0, feeds:{}, quotes:{}, quotePromise:null };
+  var byKey = {}, state = { market:null, entity:null, range:'1d', filter:'all', sort:'move', limit:100, token:0, feeds:{}, quotes:{}, quotePromise:null };
   var pollTimer, visible = !document.hidden;
   markets.forEach(function (market) { byKey[market.key] = market; });
   function el(id) { return document.getElementById(id); }

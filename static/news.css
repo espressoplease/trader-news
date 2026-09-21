@@ -89,9 +89,10 @@ a:visited { color:#828282; text-decoration:none; }
 .market-sort, .market-filter, .market-show-more { background:#fffaf4; border:1px solid #ead8c0; color:#8b7b6c; cursor:pointer; font:8px Verdana, sans-serif; padding:3px 5px; white-space:nowrap; }
 .market-sort:hover, .market-filter:hover, .market-filter.is-selected, .market-show-more:hover { background:var(--market-tint); border-color:var(--market-border); color:#222; }
 .market-constituent-legend, .market-constituent { align-items:baseline; display:grid; gap:4px; grid-template-columns:minmax(0,1fr) 54px 48px 48px 62px 38px 42px; }
-.market-constituent-legend { color:#a69482; font-size:7px; margin-top:6px; text-transform:uppercase; }
+.market-constituent-legend { background:#fffaf4; color:#a69482; font-size:7px; padding:4px 0; position:sticky; top:0; z-index:1; text-transform:uppercase; }
 .market-legend-price, .market-legend-move, .market-legend-cap, .market-legend-pe, .market-legend-yield { text-align:right; }
-.market-constituents { display:grid; gap:2px; grid-template-columns:1fr; margin-top:4px; max-height:178px; overflow-y:auto; padding-right:2px; }
+.market-constituent-scroll { margin-top:6px; max-height:200px; overflow:auto; }
+.market-constituents { display:grid; gap:2px; grid-template-columns:1fr; margin-top:4px; }
 .market-constituent { background:var(--market-row-bg,transparent); color:var(--market-row-ink,#555); font-size:8px; }
 .market-constituent > span { color:inherit; }
 .market-constituent.is-selected { box-shadow:inset 2px 0 0 var(--market-accent); }
@@ -141,9 +142,9 @@ a:visited { color:#828282; text-decoration:none; }
   .market-company-detail { margin-top:0; }
   .market-chart { height:150px; }
   .market-range { padding:4px 6px; }
-  .market-constituents { max-height:230px; }
+  .market-constituent-scroll { max-height:252px; }
   .market-detail-grid { overflow:visible; }
-  .market-constituents-card { overflow-x:auto; }
+  .market-constituents-card { min-width:0; }
   .market-constituent-legend, .market-constituent { min-width:520px; }
   .market-company-detail-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
@@ -327,8 +328,8 @@ and (max-width : 750px) {
 
 .market-membership-note { color:#9a8b7c; font-size:8px; }
 .market-index-reading { flex-wrap:wrap; }
-.market-constituent-legend, .market-constituent { min-width:650px; }
-.market-constituents-card { overflow-x:auto; }
+.market-constituent-legend, .market-constituents { min-width:650px; }
+.market-constituents-card { min-width:0; }
 
 /* Trader News chat and moderation pages. */
 .trader-chat, .trader-chat-admin, .trader-terms {
