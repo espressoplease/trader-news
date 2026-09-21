@@ -177,9 +177,9 @@
           (market-feed-refresh! (car job) (cadr job)))))))
 
 (def market-feed-prime! ()
+  (market-feed-enqueue! "^GSPC" "1mo")
   (each entry market-feed-index-symbols*
-    (market-feed-enqueue! (car (cddr entry)) "1d"))
-  (market-feed-enqueue! "^GSPC" "1mo"))
+    (market-feed-enqueue! (car (cddr entry)) "1d")))
 
 (def market-feed-start! ()
   (unless market-feed-started*
