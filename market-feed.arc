@@ -24,3 +24,26 @@
 (defopr market-feed (market-service-output "market-feed"))
 (defopr market-quotes (market-service-output "market-quotes"))
 (defopr market-feed-health (market-service-output "market-feed-health"))
+
+; UTM parameters attribute visits at the destination. This small first-party
+; ledger also records outbound research clicks when a destination strips them.
+(= market-click-ledger* (string newsdir* "market-clicks"))
+
+(def market-click-kind? (kind)
+  (in kind "company_quote" "investor_relations"))
+
+(def market-click-symbol? (symbol)
+  (and symbol (~blank symbol) (< (len symbol) 32)
+       (all [or (alphadig _) (in _ #\^ #\. #\-)] symbol)))
+
+(def market-click-record (symbol kind)
+  (when (and (market-click-symbol? symbol) (market-click-kind? kind))
+    (w/appendfile stream market-click-ledger*
+      (write (list (seconds) symbol kind) stream)
+      (disp #\newline stream))))
+
+(defopr market-click
+  (market-click-record arg!symbol arg!kind)
+  (responding type-header*!json
+    (prn)
+    (prjson (obj ok t))))

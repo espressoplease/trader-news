@@ -51,6 +51,10 @@
 
   function yahooSymbol(symbol) { return String(symbol || '').replace(/\./g, '-'); }
 
+  function clickUrl(symbol, kind) {
+    return '/market-click?symbol=' + encodeURIComponent(String(symbol || '')) + '&kind=' + encodeURIComponent(kind);
+  }
+
   function inferSector(symbol, name) {
     if (sectorByTicker[symbol]) return sectorByTicker[symbol];
     var value = String(name || '').toLowerCase();
@@ -87,6 +91,8 @@
       description:description(symbol, name, marketName),
       yahooUrl:utm('https://finance.yahoo.com/quote/' + encodeURIComponent(yahooSymbol(symbol)), 'company_quote'),
       irUrl:utm(ir.url, 'investor_relations'),
+      yahooClickUrl:clickUrl(symbol, 'company_quote'),
+      irClickUrl:clickUrl(symbol, 'investor_relations'),
       irLabel:ir.label
     };
   };

@@ -56,8 +56,14 @@
     var info = window.FINANCE_COMPANY_INFO ? window.FINANCE_COMPANY_INFO(entity.symbol, entity.companyName || entity.name, entity.marketName || (state.market && state.market.name)) : null;
     if (!info) return;
     description.textContent = info.description;
-    [['Yahoo Finance', info.yahooUrl], [info.irLabel, info.irUrl]].forEach(function (item) {
+    [['Yahoo Finance', info.yahooUrl, info.yahooClickUrl], [info.irLabel, info.irUrl, info.irClickUrl]].forEach(function (item) {
       var link = document.createElement('a'); link.href = item[1]; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = item[0];
+      link.addEventListener('click', function () {
+        try {
+          if (navigator.sendBeacon) navigator.sendBeacon(item[2], new Blob([''], {type:'text/plain'}));
+          else fetch(item[2], {credentials:'same-origin', keepalive:true});
+        } catch (_) { /* The destination link still works if analytics is blocked. */ }
+      });
       links.appendChild(link);
     });
   }
