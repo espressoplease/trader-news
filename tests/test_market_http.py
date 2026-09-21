@@ -47,6 +47,18 @@ class MarketHttpTest(unittest.TestCase):
         status,new,body=self.request(path,{'If-None-Match':headers['ETag']})
         self.assertEqual(status,200); self.assertNotEqual(headers['ETag'],new['ETag'])
         self.assertEqual(json.loads(body)['price'],42)
+    def test_fundamental_update_invalidates_origin_snapshot(self):
+        path='/market-quotes?market=sample&range=3mo'
+        _,headers,_=self.request(path)
+        self.store.save_fundamental('TEST',{'marketCap':123456,'marketCapCurrency':'USD','trailingPE':12,'dividendYieldPct':0})
+        status,new,body=self.request(path,{'If-None-Match':headers['ETag']})
+        self.assertEqual(status,200);self.assertNotEqual(new['ETag'],headers['ETag'])
+        self.assertEqual(json.loads(body)['entries'][0]['marketCap'],123456)
+        self.store.fail_fundamental('TEST',m.ProviderError('unavailable',404))
+        status,_,body=self.request(path,{'If-None-Match':new['ETag']})
+        self.assertEqual(status,200)
+        self.assertEqual(json.loads(body)['entries'][0]['marketCap'],123456)
+        self.assertEqual(json.loads(body)['entries'][0]['fundamentalsError'],'unavailable')
     def test_health_and_errors_are_not_cacheable(self):
         for path,status in [('/market-feed-health',200),('/market-quotes?market=unknown',404),('/market-feed?symbol=unknown',404)]:
             actual,headers,_=self.request(path)

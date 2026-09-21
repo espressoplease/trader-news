@@ -144,7 +144,7 @@ def load_universe(path=UNIVERSE):
 class Store:
     def __init__(self, path=DB_PATH):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self.path = str(path); self.lock = threading.RLock()
+        self.path = str(path); self.lock = threading.RLock(); self.fundamentals_revision=0
         with self.connect() as c:
             c.executescript("""PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;
             CREATE TABLE IF NOT EXISTS instruments(symbol TEXT PRIMARY KEY, provider_symbol TEXT NOT NULL, kind TEXT, exchange_tz TEXT, enabled INTEGER DEFAULT 1, cooldown_until INTEGER DEFAULT 0, requested_at INTEGER DEFAULT 0, requested_range TEXT);
@@ -286,6 +286,7 @@ class Store:
     def save_fundamental(self,symbol,values):
         with self.lock,self.connect() as c:
             c.execute("INSERT INTO fundamentals(symbol,payload,fetched_at,attempted_at,next_due,error) VALUES(?,?,?,?,?,NULL) ON CONFLICT(symbol) DO UPDATE SET payload=excluded.payload,fetched_at=excluded.fetched_at,attempted_at=excluded.attempted_at,next_due=excluded.next_due,error=NULL",(symbol,json.dumps(values),now(),now(),now()+86400))
+        self.fundamentals_revision+=1
 
     def fail_fundamental(self,symbol,error):
         status=getattr(error,'status',0)
@@ -295,6 +296,7 @@ class Store:
             c.execute("INSERT INTO fundamentals(symbol,attempted_at,next_due,error) VALUES(?,?,?,?) ON CONFLICT(symbol) DO UPDATE SET attempted_at=excluded.attempted_at,next_due=excluded.next_due,error=excluded.error",(symbol,now(),now()+delay,str(error)[:400]))
             if not listing_error:
                 c.execute("INSERT OR REPLACE INTO fundamental_provider_state VALUES('backoff_until',?)",(now()+delay,))
+        self.fundamentals_revision+=1
 
     def health(self, worker=None):
         with self.connect() as c:
@@ -454,7 +456,7 @@ def market_memberships(path=UNIVERSE):
 def make_handler(store, rows, indexes, worker, memberships=None):
     memberships=market_memberships() if memberships is None else memberships
     @lru_cache(maxsize=32)
-    def cached_quotes(symbols, range_, bucket):
+    def cached_quotes(symbols, range_, bucket, fundamentals_revision):
         return {'entries':[store.quote(symbol,range_) for symbol in symbols]}
 
     class Handler(BaseHTTPRequestHandler):
@@ -478,7 +480,7 @@ def make_handler(store, rows, indexes, worker, memberships=None):
             u=urlparse(self.path); q=parse_qs(u.query)
             if u.path=='/market-feed-health': return self.respond(store.health(worker))
             if u.path=='/market-feed':
-                if q.get('all',[''])[0]: return self.respond(cached_quotes(tuple(indexes),'1d',now()//5))
+                if q.get('all',[''])[0]: return self.respond(cached_quotes(tuple(indexes),'1d',now()//5,store.fundamentals_revision))
                 s=q.get('symbol',['^GSPC'])[0];
                 if s not in rows: return self.respond({'status':'unknown','error':'unknown symbol'},404)
                 store.enqueue(s,q.get('range',['1d'])[0]); return self.respond(store.feed(s,q.get('range',['1d'])[0]))
@@ -487,7 +489,7 @@ def make_handler(store, rows, indexes, worker, memberships=None):
                 market=q.get('market',[''])[0]
                 if market and market not in memberships: return self.respond({'error':'unknown market'},404)
                 symbols=memberships[market] if market else tuple(sorted(set(q.get('symbols',[''])[0].split(',')) & rows.keys()))
-                return self.respond(cached_quotes(symbols,rr,now()//5))
+                return self.respond(cached_quotes(symbols,rr,now()//5,store.fundamentals_revision))
             self.respond({'error':'not found'},404)
     return Handler
 
