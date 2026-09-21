@@ -133,7 +133,7 @@
     pollTimer = window.setTimeout(function () {
       refresh(true);
       schedulePoll();
-    }, delay === undefined ? 40000 + Math.random() * 15000 : delay);
+    }, delay === undefined ? 120000 + Math.random() * 60000 : delay);
   }
   function init() {
     if (!el('market-strip') || !markets.length) return; createRail();

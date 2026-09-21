@@ -86,13 +86,13 @@ Create `/var/cache/nginx/trader-news-market` owned by `www-data` first. Test wit
 `sudo nginx -t` before reloading. Roll back both configuration files together.
 
 The two public data routes go directly to loopback port 8766. Nginx caches
-successful responses for 20 seconds, coalesces concurrent cache misses and
+successful responses for two minutes, coalesces concurrent cache misses and
 refreshes expired entries in the background. Health and errors are never cached.
 Cookies and authorization headers are not forwarded on these public routes.
 News, accounts, votes and other application routes retain their existing behavior.
 
 The frontend requests one reusable company snapshot per index/range, polls at
-random 40-55 second intervals while visible, and staggers tab-return refreshes.
+random 2-3 minute intervals while visible, and staggers tab-return refreshes.
 ETags allow unchanged responses to return 304 without another response body.
 `X-Market-Cache` exposes HIT, MISS, STALE, UPDATING or REVALIDATED for verification;
 health always reports BYPASS. The provider still has one global two-second gate.

@@ -411,7 +411,7 @@ def make_handler(store, rows, indexes, worker, memberships=None):
             unchanged=cacheable and (etag in matches or '*' in matches)
             self.send_response(304 if unchanged else code)
             self.send_header('Content-Type','application/json')
-            self.send_header('Cache-Control','public, max-age=0, s-maxage=20' if cacheable else 'no-store')
+            self.send_header('Cache-Control','public, max-age=0, s-maxage=120' if cacheable else 'no-store')
             if cacheable: self.send_header('ETag',etag)
             if not unchanged: self.send_header('Content-Length',str(len(raw)))
             self.end_headers()

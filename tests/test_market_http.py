@@ -33,7 +33,7 @@ class MarketHttpTest(unittest.TestCase):
         status,headers,body=self.request('/market-quotes?market=sample&range=3mo')
         self.assertEqual(status,200)
         self.assertEqual(headers['Content-Type'],'application/json')
-        self.assertIn('s-maxage=20',headers['Cache-Control'])
+        self.assertIn('s-maxage=120',headers['Cache-Control'])
         self.assertEqual(json.loads(body)['entries'][0]['symbol'],'TEST')
         legacy=self.request('/market-quotes?symbols=TEST&range=3mo')
         self.assertEqual(body,legacy[2])
