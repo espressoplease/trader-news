@@ -94,22 +94,23 @@
          maxtime 20)))
 
 (def market-feed-points (payload)
-  (let result (aand payload!chart payload!chart!result (car it))
-    (when result
-      (let indicators result!indicators
-        (let quote-data (and indicators (car indicators!quote))
-          (when quote-data
-            (let ts result!timestamp
-              (let closes quote-data!close
-                (let out nil
-                  (while (and ts closes)
-                    (let close (market-feed-number (car closes))
-                      (when (and (car ts) close)
-                        (push (obj ts (* (car ts) 1000)
-                                   close close) out)))
-                    (= ts (cdr ts)
-                       closes (cdr closes)))
-                  (rev out))))))))))
+  (let chart (and payload (payload 'chart))
+    (let results (and chart (chart 'result))
+      (let result (and results (car results))
+        (let indicators (and result (result 'indicators))
+          (let quotes (and indicators (indicators 'quote))
+            (let quote-data (and quotes (car quotes))
+              (let ts (and result (result 'timestamp))
+                (let closes (and quote-data (quote-data 'close))
+                  (let out nil
+                    (while (and ts closes)
+                      (let close (market-feed-number (car closes))
+                        (when (and (car ts) close)
+                          (push (obj ts (* (car ts) 1000)
+                                     close close) out)))
+                      (= ts (cdr ts)
+                         closes (cdr closes)))
+                    (rev out)))))))))))
 
 (def market-feed-persist! ()
   (ensure-dir market-feed-dir*)
