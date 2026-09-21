@@ -34,7 +34,10 @@
     ("3mo" "1d" 86400)
     ("6mo" "1d" 86400)
     ("ytd" "1d" 86400)
-    ("1y" "1wk" 86400)
+    ; Keep a daily 1Y base series. The browser slices this once-fetched
+    ; history into 1M, 3M, 6M, YTD, and 1Y views, avoiding five requests for
+    ; the same instrument while preserving the selected range accurately.
+    ("1y" "1d" 86400)
     ("5y" "1mo" 86400)))
 
 ; The complete market-data.js file remains the source of constituent metadata.
@@ -71,7 +74,8 @@
 (def market-feed-fresh (entry range)
   (and entry entry!points (acons entry!points) (> (len entry!points) 1)
        (let cfg (market-feed-config range)
-         (and entry!fetchedAt (< (market-feed-age entry) (car (cddr cfg)))))))
+         (and entry!interval (is entry!interval (cadr cfg))
+              entry!fetchedAt (< (market-feed-age entry) (car (cddr cfg)))))))
 
 (def market-feed-yahoo-url (symbol range)
   (let cfg (market-feed-config range)
@@ -104,12 +108,19 @@
                 (let mfp-quote-data (car mfp-quotes)
                   (let mfp-ts (mfp-result 'timestamp)
                     (let mfp-closes (mfp-quote-data 'close)
-                      (map (fn (mfp-t mfp-c)
-                             (let mfp-close (market-feed-number mfp-c)
-                               (and mfp-t mfp-close
-                                    (obj ts (* mfp-t 1000)
-                                         close mfp-close))))
-                           mfp-ts mfp-closes))))))))))))
+                      (keep [and _]
+                            (map (fn (mfp-t mfp-c)
+                                   (let mfp-close (market-feed-number mfp-c)
+                                     (and mfp-t mfp-close
+                                          (obj ts (* mfp-t 1000)
+                                               close mfp-close))))
+                                 mfp-ts mfp-closes)))))))))))))
+
+(def market-feed-trim-points (points range)
+  (if (is range "ytd")
+      (let cutoff (* 1000 (datetime (car (date)) 1 1))
+        (keep [and _!ts (>= _!ts cutoff)] points))
+      points))
 
 (def market-feed-persist! ()
   (ensure-dir market-feed-dir*)
@@ -169,9 +180,10 @@
      market-feed-last-provider-status* message)
   (w/lock market-feed-lock*
     (let old (market-feed-entry symbol range)
-      (= (market-feed-cache* (market-feed-entry-key symbol range))
+         (= (market-feed-cache* (market-feed-entry-key symbol range))
          (obj symbol symbol range range
               points (or (and old old!points) 'empty)
+              interval (cadr (market-feed-config range))
               fetchedAt (and old old!fetchedAt)
               attemptedAt (seconds)
               status (if (and old old!points) "stale" "unavailable")
@@ -187,12 +199,15 @@
   (let response (errsafe:market-feed-http (market-feed-yahoo-url symbol range))
     (if (and response (= response!status 200))
         (let payload (errsafe:from-json response!body)
-          (let points (and payload (market-feed-points payload))
+          (let points (and payload
+                           (market-feed-trim-points (market-feed-points payload)
+                                                     range))
             (if (> (len points) 1)
                 (do
                   (w/lock market-feed-lock*
                     (= (market-feed-cache* (market-feed-entry-key symbol range))
                        (obj symbol symbol range range points points
+                            interval (cadr (market-feed-config range))
                             fetchedAt (seconds) attemptedAt (seconds)
                             status "live-delayed" source market-feed-provider*
                             error nil))
