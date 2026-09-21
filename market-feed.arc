@@ -61,7 +61,7 @@
   (and entry entry!fetchedAt (- (seconds) entry!fetchedAt)))
 
 (def market-feed-fresh (entry range)
-  (and entry entry!points (> (len entry!points) 1)
+  (and entry entry!points (acons entry!points) (> (len entry!points) 1)
        (let cfg (market-feed-config range)
          (and entry!fetchedAt (< (market-feed-age entry) (caddr cfg))))))
 
@@ -165,14 +165,15 @@
           nil))))
 
 (def market-feed-poll! ()
-  (unless (> (seconds) market-feed-backoff-until*)
-    (unless (> market-feed-next-request-at* (seconds))
+  (let now (seconds)
+    (when (and (>= now market-feed-backoff-until*)
+               (>= now market-feed-next-request-at*))
       (let job nil
         (w/lock market-feed-lock*
           (when market-feed-queue*
             (= job (pop market-feed-queue*))))
         (when job
-          (= market-feed-next-request-at* (+ (seconds) market-feed-min-request-secs*))
+          (= market-feed-next-request-at* (+ now market-feed-min-request-secs*))
           (market-feed-refresh! (car job) (cadr job)))))))
 
 (def market-feed-prime! ()
@@ -197,7 +198,7 @@
   (let age (market-feed-age entry)
     (obj symbol (and entry entry!symbol)
          range range
-         points (or (and entry entry!points) 'empty)
+         points (if (and entry (acons entry!points)) entry!points 'empty)
          fetchedAt (and entry entry!fetchedAt)
          ageSecs age
          ageLabel (market-feed-age-label age)
