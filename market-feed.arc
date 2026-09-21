@@ -211,9 +211,9 @@
 
 (def market-feed-all-response ()
   (obj ok t serverTime (seconds) source market-feed-provider*
-       interval "1d rail snapshots"
-       entries (map [market-feed-public-entry _ "1d"]
-                    (keep [and _!symbol (is _!range "1d")] (vals market-feed-cache*)))))
+       interval "mixed cached ranges"
+       entries (map [market-feed-public-entry _ _!range]
+                    (keep [and _!symbol _!range] (vals market-feed-cache*)))))
 
 (def market-feed-response ()
   (market-feed-start!)

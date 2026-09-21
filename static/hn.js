@@ -420,8 +420,8 @@ document.addEventListener("click", onclick);
     window.setInterval(refreshPageTitle, 60000);
     marketText(marketEl('market-refresh'), marketData.length + ' indices · server cache warming');
     fetch(marketFeedUrl('', '', true)).then(function (response) { return response.json(); }).then(function (payload) {
-      var entries = payload.entries || [], bySymbol = {};
-      aeach(function (entry) { bySymbol[entry.symbol] = entry; }, entries);
+      var entries = payload.entries || [], railEntries = entries.filter(function (entry) { return entry.range == '1d'; }), bySymbol = {};
+      aeach(function (entry) { bySymbol[entry.symbol] = entry; }, railEntries);
       aeach(function (item) {
         var entry = bySymbol[item.symbol];
         if (!entry || !entry.points || entry.points.length < 2) return;
@@ -429,7 +429,7 @@ document.addEventListener("click", onclick);
         item.cache['1d'] = Promise.resolve(entry.points.map(function (point) { return {ts:point.ts, close:point.close}; }));
         item.marketFeed = entry; item.live = entry.status == 'live-delayed'; updateRail(item);
       }, marketData);
-      var freshest = entries.filter(function (entry) { return entry.status == 'live-delayed'; }).sort(function (a, b) { return (a.ageSecs || a.agesecs || 0) - (b.ageSecs || b.agesecs || 0); })[0];
+      var freshest = railEntries.filter(function (entry) { return entry.status == 'live-delayed'; }).sort(function (a, b) { return (a.ageSecs || a.agesecs || 0) - (b.ageSecs || b.agesecs || 0); })[0];
       marketText(marketEl('market-refresh'), freshest ? 'server cache · ' + feedAgeLabel(freshest) : marketData.length + ' indices · warming');
       marketText(marketEl('market-source'), freshest ? feedSourceLabel(freshest) : 'Server cache warming · local snapshot if unavailable');
     }).catch(function () { marketText(marketEl('market-refresh'), marketData.length + ' indices · cache unavailable'); });
