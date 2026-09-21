@@ -74,6 +74,17 @@ use:
 Duplicate canonical URLs are ignored. `(backlog-publish-random 1)` publishes
 one pending item immediately, useful when editorially appropriate.
 
+For batch editorial intake, write a JSON array of `{title, url, source}`
+objects and run:
+
+```sh
+node scripts/backlog-import.mjs /path/to/articles.json
+```
+
+The importer updates the same durable queue used by the web process. On
+production, stop the service before importing and start it again immediately
+afterward, so its in-memory queue is refreshed from disk.
+
 For production deployments, instead of autoreload, you can manually
 `git pull` and then run `(reload)` in the repl to ship an update.
 (You could use autoreload in production, but then each request is
