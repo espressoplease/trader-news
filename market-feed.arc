@@ -80,6 +80,11 @@
             "?range=" (urlencode (car cfg))
             "&interval=" (urlencode (cadr cfg)))))
 
+(def market-feed-number (value)
+  ; This JSON decoder can represent long decimal tokens as symbols. Convert
+  ; both those tokens and ordinary JSON numbers through Arc's numeric reader.
+  (and value (errsafe:asnum (string value))))
+
 (def market-feed-http (url)
   (http-response url
     (obj headers
@@ -97,9 +102,10 @@
             (let closes quote!close
               (let out nil
                 (while (and ts closes)
-                  (when (and (car ts) (isa!num (car closes)))
-                    (push (obj ts (* (car ts) 1000)
-                               close (car closes)) out))
+                  (let close (market-feed-number (car closes))
+                    (when (and (car ts) close)
+                      (push (obj ts (* (car ts) 1000)
+                                 close close) out)))
                   (= ts (cdr ts)
                      closes (cdr closes)))
                 (rev out)))))))))
