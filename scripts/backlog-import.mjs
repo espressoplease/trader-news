@@ -62,10 +62,12 @@ const program = [
   '(load "news.arc")',
   '(ensure-newsdirs)',
   '(ensure-market-backlog)',
+  '(prn (+ "stored-before=" (len market-backlog*)))',
   ...cleanEntries.map(
     ({ title, url, source }) =>
       `(backlog-add ${arcString(title)} ${arcString(url)} ${arcString(source)})`,
   ),
+  '(prn (+ "stored-after=" (len market-backlog*)))',
   '(prn (+ "pending=" (len:backlog-pending)))',
 ].join("\n");
 
@@ -88,4 +90,7 @@ if (result.status !== 0) {
 }
 
 const pending = result.stdout.match(/pending=(\d+)/)?.[1] || "unknown";
-console.log(`Imported ${cleanEntries.length} candidate${cleanEntries.length === 1 ? "" : "s"}; pending=${pending}.`);
+const before = Number(result.stdout.match(/stored-before=(\d+)/)?.[1]);
+const after = Number(result.stdout.match(/stored-after=(\d+)/)?.[1]);
+const added = Number.isFinite(before) && Number.isFinite(after) ? after - before : "unknown";
+console.log(`Processed ${cleanEntries.length} candidate${cleanEntries.length === 1 ? "" : "s"}; added=${added}; pending=${pending}.`);
