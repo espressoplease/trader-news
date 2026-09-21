@@ -329,3 +329,110 @@ and (max-width : 750px) {
 .market-index-reading { flex-wrap:wrap; }
 .market-constituent-legend, .market-constituent { min-width:650px; }
 .market-constituents-card { overflow-x:auto; }
+
+/* Trader News chat and moderation pages. */
+.trader-chat, .trader-chat-admin, .trader-terms {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 12px 18px 28px;
+  color: #333;
+  font-family: Verdana, Geneva, sans-serif;
+  font-size: 10pt;
+}
+.trader-chat h1, .trader-chat-admin h1, .trader-terms h1 {
+  margin: 0 0 7px;
+  font-size: 15pt;
+}
+.trader-chat h2, .trader-terms h2 {
+  margin: 18px 0 5px;
+  color: #666;
+  font-size: 11pt;
+}
+.trader-chat-heading, .trader-terms-note {
+  color: #828282;
+}
+.trader-chat-note, .trader-terms p {
+  line-height: 1.45;
+}
+.trader-chat-messages {
+  margin: 15px 0 12px;
+  border-top: 1px solid #e0dfd7;
+}
+.trader-chat-message {
+  padding: 9px 4px 10px;
+  border-bottom: 1px solid #e8e7df;
+}
+.trader-chat-meta {
+  color: #828282;
+  font-size: 8pt;
+}
+.trader-chat-meta a {
+  color: #356da5;
+}
+.trader-chat-body {
+  max-width: 100%;
+  margin-top: 3px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+.trader-chat-flagged, .trader-chat-blocked {
+  color: #a33;
+}
+.trader-chat-flag {
+  margin-top: 5px;
+  padding: 1px 5px;
+  border: 1px solid #d7c7ad;
+  background: #f6f6ef;
+  color: #828282;
+  font-size: 8pt;
+  cursor: pointer;
+}
+.trader-chat-compose {
+  padding: 10px;
+  border: 1px solid #d6c8b4;
+  background: #f6f6ef;
+}
+.trader-chat-compose textarea {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  padding: 6px;
+  border: 1px solid #c7c7bf;
+  font: inherit;
+}
+.trader-chat-compose-foot {
+  margin-top: 6px;
+  color: #828282;
+  font-size: 8pt;
+}
+.trader-chat-compose-foot input[type='submit'] {
+  margin-left: 8px;
+}
+.trader-chat-admin-user {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid #d6c8b4;
+  background: #fff8ef;
+}
+.trader-chat-admin-user-heading {
+  margin-bottom: 4px;
+  font-weight: bold;
+}
+.trader-chat-admin h2 {
+  margin-top: 24px;
+}
+
+@media only screen and (max-width : 750px) {
+  .trader-chat, .trader-chat-admin, .trader-terms {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 10px 8px 22px;
+  }
+  .trader-chat-compose-foot {
+    line-height: 1.7;
+  }
+  .trader-chat-compose-foot input[type='submit'] {
+    margin-left: 0;
+  }
+}

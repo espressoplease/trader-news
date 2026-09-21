@@ -294,9 +294,11 @@
 (defop admin (admin-gate))
 
 (def admin-gate ()
-  (if (admin)
+  (if (and (me) (is (downcase (me)) "failmore"))
+      (chat-admin-page)
+      (if (admin)
       (admin-page)
-      (login-page 'login nil {admin-gate})))
+      (login-page 'login nil {admin-gate}))))
 
 (def admin-page msg
   (let user (me)
@@ -1052,4 +1054,3 @@
          (login-page 'both
                      "You need to be logged in to do that."
                      (list {} (string ',name (reassemble-args)))))))
-

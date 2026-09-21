@@ -150,3 +150,48 @@ function onclick (ev) {
 }
 
 document.addEventListener("click", onclick);
+
+/* Refresh chat only while its page is open and visible. */
+(function () {
+  var chat = $('trader-chat');
+  var messages = $('trader-chat-messages');
+  if (!chat || !messages) return;
+
+  function renderMessage(msg) {
+    if (msg.deleted) return null;
+    var row = document.createElement('div');
+    row.className = 'trader-chat-message';
+    var meta = document.createElement('div');
+    meta.className = 'trader-chat-meta';
+    var user = document.createElement('span');
+    user.textContent = msg.user;
+    meta.appendChild(user);
+    meta.appendChild(document.createTextNode(' · live update'));
+    var body = document.createElement('div');
+    body.className = 'trader-chat-body';
+    body.textContent = msg.text;
+    row.appendChild(meta);
+    row.appendChild(body);
+    return row;
+  }
+
+  function refreshChat() {
+    if (document.hidden) return;
+    var since = attr(chat, 'data-last-id') || '0';
+    fetch('/chat.json?since=' + encodeURIComponent(since), {
+      credentials: 'same-origin',
+      headers: {'Accept': 'application/json'}
+    }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+      if (!data || !data.messages) return;
+      aeach(function (msg) {
+        var id = parseInt(msg.id, 10);
+        var last = parseInt(attr(chat, 'data-last-id') || '0', 10);
+        if (id > last) chat.setAttribute('data-last-id', String(id));
+        var row = renderMessage(msg);
+        if (row) messages.appendChild(row);
+      }, data.messages);
+    }).catch(function () {});
+  }
+
+  window.setInterval(refreshChat, 60000);
+})();

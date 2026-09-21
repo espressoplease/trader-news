@@ -99,7 +99,8 @@
    storydir* (string arcdir* "news/story/")
    profdir*  (string arcdir* "news/profile/")
    votedir*  (string arcdir* "news/vote/")
-   frontdir* (string arcdir* "news/front/"))
+   frontdir* (string arcdir* "news/front/")
+   chatdir*  (string arcdir* "news/chat/"))
 
 (or= votes* (table) profs* (table))
 
@@ -122,7 +123,7 @@
 
 (def ensure-newsdirs ()
   (map0 ensure-dir (list arcdir* newsdir* storydir*
-                         votedir* profdir* frontdir*)))
+                         votedir* profdir* frontdir* chatdir*)))
 
 (def load-users ((o names (users)))
   (pr "load @(len names) users: ")
@@ -817,6 +818,11 @@
       (link "Guidelines"  "newsguidelines.html")
       (link "FAQ"         "newsfaq.html")
       (link "Lists"       "lists")
+      (link "Chat"        "chat")
+      (tag (a href "https://github.com/espressoplease/trader-news"
+              target "_blank" rel "noopener noreferrer")
+        (pr "GitHub"))
+      (link "Terms"       "terms")
       (link "API"         "https://github.com/HackerNews/API")
       (link "Security"    "security.html")
       (link "DMCA"        "dmca.html")
@@ -1032,7 +1038,7 @@
       (tag (img class "trader-logo" src logo-url* width 18 height 18
                 style "display:block;")))))
 
-(or= toplabels* '(nil "welcome" "new" "threads" "past" "comments" "lists" "*"))
+(or= toplabels* '(nil "welcome" "new" "threads" "past" "comments" "lists" "chat" "terms" "*"))
 
 ; redefined later
 
@@ -1046,6 +1052,10 @@
     (toplink "past" "front" label)
     (toplink "comments" "newcomments" label)
     (toplink "lists" "lists" label)
+    (toplink "chat" "chat" label)
+    (tag (a href "https://github.com/espressoplease/trader-news"
+            target "_blank" rel "noopener noreferrer")
+      (pr "GitHub"))
     (hook 'toprow label)
     (link "submit")
     (unless (mem label toplabels*)
@@ -1139,6 +1149,7 @@
 
 (load "backlog.arc")
 (load "market-feed.arc")
+(load "chat.arc")
 
 
 ; News Admin
