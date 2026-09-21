@@ -9,6 +9,7 @@ Group=deploy
 WorkingDirectory=/home/deploy/apps/trader-news
 Environment=PORT=8080
 Environment=SITE_URL=https://trader-news.fyi
+Environment=SHARC_DAEMON=1
 ExecStart=/usr/bin/sbcl --control-stack-size 16 --dynamic-space-size 10240 --script /home/deploy/apps/trader-news/boot.lisp news.arc
 Restart=on-failure
 RestartSec=5
