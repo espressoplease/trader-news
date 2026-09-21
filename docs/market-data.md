@@ -65,3 +65,13 @@ code commit and stop/disable `trader-news-market.service` before restarting the
 old Arc application. The old version has its own collector, so do not run both
 collectors. Keep SQLite and old cache files intact. Restore the new unit when
 returning to the native implementation.
+
+## Public response compression
+
+Production includes `/etc/nginx/snippets/trader-news-market.conf` inside the
+HTTPS server block for tradernews.fyi. Its source is
+`deploy/trader-news-market.nginx.conf`. It compresses public market JSON and
+sets `Vary: Accept-Encoding`; private application routes retain their existing
+configuration. Update the snippet with the repository version, run
+`sudo nginx -t`, and reload Nginx after changes. The pre-compression site config
+is backed up at `/tmp/trader-news-nginx.pre-market-gzip.conf` on the server.
