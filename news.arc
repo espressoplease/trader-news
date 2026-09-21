@@ -291,7 +291,13 @@
   `(mem ,k (uvar ,u keys)))
 
 (def by (i)
-  (assert (uid->user* i!by) (uid-message i)))
+  (or (uid->user* i!by)
+      ; Older curated backlog stories were written with the original
+      ; marketbot UID. Resolve those records by their durable source tag so
+      ; a UID change cannot blank the whole homepage.
+      (and (is i!ip "market-backlog")
+           market-backlog-author*)
+      (err (uid-message i))))
 
 (def uid-message (i)
   (+ "No such uid @{i!by}"
