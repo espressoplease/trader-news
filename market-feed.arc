@@ -108,8 +108,8 @@
                              (let mfp-close (market-feed-number mfp-c)
                                (and mfp-t mfp-close
                                     (obj ts (* mfp-t 1000)
-                                         close mfp-close)))
-                           mfp-ts mfp-closes)))))))))))))
+                                         close mfp-close))))
+                           mfp-ts mfp-closes))))))))))))
 
 (def market-feed-persist! ()
   (ensure-dir market-feed-dir*)
