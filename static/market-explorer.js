@@ -11,6 +11,31 @@
   function finite(value) { return typeof value === 'number' && Number.isFinite(value); }
   function number(value) { return finite(value) ? Number(value).toLocaleString(undefined, {maximumFractionDigits:2}) : 'n/a'; }
   function percent(value) { return finite(value) ? (value >= 0 ? '+' : '') + Number(value).toFixed(2) + '%' : 'n/a'; }
+  function marketCap(record) {
+    var value = record.marketCap;
+    if (!finite(value) || !record.marketCapCurrency) return 'n/a';
+    var units = [[1e12,'T'],[1e9,'B'],[1e6,'M'],[1e3,'K']], result = number(value);
+    for (var i=0;i<units.length;i++) if (value >= units[i][0]) { result = number(value / units[i][0]) + units[i][1]; break; }
+    return result + ' ' + record.marketCapCurrency;
+  }
+  function peRatio(record) { return finite(record.trailingPE) && record.trailingPE > 0 ? number(record.trailingPE) + 'x' : 'n/a'; }
+  function dividendYield(record) { return finite(record.dividendYieldPct) ? record.dividendYieldPct.toFixed(2) + '%' : 'n/a'; }
+  function fundamentalsTitle(record) {
+    if (!record.fundamentalsFetchedAt) return record.fundamentalsError ? 'Fundamentals unavailable: ' + record.fundamentalsError : 'Fundamentals awaiting collection.';
+    return 'Source: ' + record.fundamentalsSource + '\nFetched: ' + timestamp(record.fundamentalsFetchedAt) + '\nSource page updated: ' + (record.sourceUpdatedOn || 'not reported') + '\nP/E: trailing earnings. Yield: provider-reported dividend yield.' + (record.fundamentalsError ? '\nRefresh failed; displaying saved values.' : '');
+  }
+  function renderFundamentals(record) {
+    var target = el('market-company-detail-metrics'); if (!target) return;
+    target.innerHTML = '';
+    [['Market cap',marketCap(record)],['P/E (trailing)',peRatio(record)],['Dividend yield',dividendYield(record)]].forEach(function(metric) {
+      var box=document.createElement('div'), label=document.createElement('span'), value=document.createElement('strong');
+      box.className='market-company-detail-metric'; label.className='market-company-detail-label'; value.className='market-company-detail-value';
+      label.textContent=metric[0]; value.textContent=metric[1]; box.title=fundamentalsTitle(record); box.appendChild(label); box.appendChild(value); target.appendChild(box);
+    });
+    var meta=el('market-company-detail-meta'); meta.textContent=record.fundamentalsFetchedAt ? 'Fundamentals checked ' + age(Date.now()/1000-record.fundamentalsFetchedAt) + '. ' : 'Fundamentals awaiting collection. ';
+    if (record.fundamentalsSourceUrl) { var link=document.createElement('a'); link.href=record.fundamentalsSourceUrl; link.target='_blank'; link.rel='noopener noreferrer'; link.textContent=record.fundamentalsSource; meta.appendChild(link); }
+    meta.title=fundamentalsTitle(record);
+  }
   function changeClass(node, value) { if (!node) return; node.className = node.className.replace(/\bis-negative\b/g, ''); if (finite(value) && value < 0) node.className += ' is-negative'; }
   function age(seconds) { if (!finite(seconds)) return 'unknown'; seconds = Math.max(0, Math.round(seconds)); if (seconds < 60) return seconds + 's ago'; if (seconds < 3600) return Math.round(seconds / 60) + 'm ago'; if (seconds < 86400) return Math.round(seconds / 3600) + 'h ago'; return Math.round(seconds / 86400) + 'd ago'; }
   function timestamp(seconds) { return finite(seconds) ? new Date(seconds * 1000).toLocaleString() : 'unknown'; }
@@ -79,7 +104,7 @@
     rows.slice(0, state.limit).forEach(function (row) {
       var node = document.createElement('div'), ident = document.createElement('span'), price = document.createElement('span'), day = document.createElement('span'), period = document.createElement('span'), cap = document.createElement('span'), pe = document.createElement('span'), yieldValue = document.createElement('span'), badge = document.createElement('span');
       node.className = 'market-constituent'; node.tabIndex = 0; node.title = badgeTitle(row.quote); ident.className = 'market-constituent-ident'; price.className = 'market-constituent-price'; day.className = 'market-constituent-day market-constituent-move'; period.className = 'market-constituent-period market-constituent-move'; cap.className = 'market-constituent-cap'; pe.className = 'market-constituent-pe'; yieldValue.className = 'market-constituent-yield'; badge.className = 'market-row-badge';
-      ident.textContent = row.ticker + ' ' + row.name; price.textContent = number(row.quote.price) + (finite(row.quote.price) && row.quote.currency ? ' ' + row.quote.currency : ''); day.textContent = percent(row.quote.dayChangePct); period.textContent = percent(row.quote.periodChangePct); cap.textContent = 'n/a'; pe.textContent = 'n/a'; yieldValue.textContent = 'n/a'; badge.textContent = badgeText(row.quote); badge.title = badgeTitle(row.quote); changeClass(day, row.quote.dayChangePct); changeClass(period, row.quote.periodChangePct); tone(node, row.move);
+      ident.textContent = row.ticker + ' ' + row.name; price.textContent = number(row.quote.price) + (finite(row.quote.price) && row.quote.currency ? ' ' + row.quote.currency : ''); day.textContent = percent(row.quote.dayChangePct); period.textContent = percent(row.quote.periodChangePct); cap.textContent = marketCap(row.quote); pe.textContent = peRatio(row.quote); yieldValue.textContent = dividendYield(row.quote); [cap,pe,yieldValue].forEach(function(field) { field.title = fundamentalsTitle(row.quote); }); badge.textContent = badgeText(row.quote); badge.title = badgeTitle(row.quote); changeClass(day, row.quote.dayChangePct); changeClass(period, row.quote.periodChangePct); tone(node, row.move);
       [ident, price, day, period, cap, pe, yieldValue, badge].forEach(function (child) { node.appendChild(child); });
       function select() { loadCompany(row); } node.addEventListener('click', select); node.addEventListener('keydown', function (event) { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); } }); target.appendChild(node);
     });
@@ -89,6 +114,7 @@
   function renderDetail(entity, record) {
     var points = clean(record && record.points), s = stats(points), value = finite(record && record.price) ? record.price : s.last, move = record && (state.range === '1d' ? record.dayChangePct : record.periodChangePct);
     text('market-detail-name', entity.name); text('market-detail-symbol', entity.symbol); text('market-detail-last', number(value) + (entity.type === 'company' && record && record.currency ? ' ' + record.currency : '')); var change = el('market-detail-change'); if (change) { change.textContent = percent(move); changeClass(change, move); }
+    if (entity.type === 'company') renderFundamentals(record || {});
     draw(points, entity.name); text('market-chart-caption', ranges[state.range] + ' price history · ' + (points.length ? new Date(points[0].ts).toLocaleDateString() + ' to ' + new Date(points[points.length-1].ts).toLocaleDateString() + ' · ' : '') + sourceLine(record)); text('market-source', sourceLine(record));
   }
   function selectEntity(entity) {
@@ -98,9 +124,7 @@
       companyPanel.className = companyPanel.className.replace(/\bnoshow\b/g, '') + (entity.type === 'company' ? '' : ' noshow');
       if (entity.type === 'company') {
         text('market-company-detail-name', entity.name);
-        text('market-company-detail-meta', 'Cached quote fields are shown in the table. Fundamentals are unavailable.');
-        var metrics = el('market-company-detail-metrics');
-        if (metrics) metrics.innerHTML = '<div class="market-company-detail-metric"><span class="market-company-detail-label">P/E</span><strong class="market-company-detail-value">n/a</strong></div><div class="market-company-detail-metric"><span class="market-company-detail-label">yield</span><strong class="market-company-detail-value">n/a</strong></div>';
+        renderFundamentals(entity.quote || {});
       }
     }
     document.querySelectorAll('.market-range').forEach(function (button) { button.className = button.className.replace(/\bis-selected\b/g, '') + (button.id === 'market-range-' + state.range ? ' is-selected' : ''); });

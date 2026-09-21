@@ -5,8 +5,8 @@ buttons select both the chart window and the company performance column.
 Performance is a price return using the daily close preceding the range,
 without dividend reinvestment. Incomplete range history is explicitly marked.
 Company membership is curated and may be incomplete; it is not a live index
-composition service. Market cap, P/E and yield stay unavailable until backed by
-an actual source.
+composition service. Market cap, trailing P/E and dividend yield are stored separately from prices,
+using daily snapshots from Stock Analysis statistics pages where available.
 
 ## Processes and data
 
@@ -19,7 +19,8 @@ using the same data directory.
 
 The collector spaces provider requests by at least two seconds. Browser requests
 read the cache and can prioritize a selected chart; they never wait for an
-upstream download. Yahoo is the currently validated provider. Failed requests
+upstream download. Yahoo supplies prices/history and Stock Analysis supplies
+daily fundamentals. Failed requests
 preserve the last successful data. There is no unverified automatic fallback.
 
 Prices retain their provider currency, including GBp for British pence. A
@@ -102,3 +103,28 @@ its existing systemd file-descriptor limit is 524288. The Trader News HTTPS
 server uses a 15-second idle keepalive timeout to free idle polling sockets.
 These changes provide connection headroom, not a claim of tested 20k capacity.
 A separate representative load test is still needed before that guarantee.
+
+
+## Daily fundamentals
+
+`market_fundamentals.py` parses the public statistics table's precise numeric
+values, including its own market-cap currency. A UK share price in pence does
+not change the market cap's reported GBP units. P/E is trailing, and missing or
+nonpositive P/E remains unavailable. Yield is the provider-reported dividend
+yield in percentage points; missing yield is not inferred to mean zero.
+
+Fundamentals share the price collector's global two-second request gate. While
+fundamentals are due, one in three collector turns checks a company; after a
+successful check it is not due again for 24 hours. Selecting a company chart
+prioritizes its missing/due fundamentals. Initial population takes roughly
+1.5 hours for the full universe under normal responses, alongside continued
+price collection. Failed checks preserve saved values and timestamps. A source
+rate limit or outage backs off fundamentals independently of Yahoo prices.
+
+SQLite keeps one fundamentals snapshot per company, its successful fetch time,
+last attempt, retry schedule and error. The API exposes those fields separately
+from quote freshness; cells have source/date tooltips, and the company panel
+links to the source page. The source's update date is page metadata, not a
+financial-statement reporting period. Source coverage and refresh errors appear
+in `/market-feed-health`. Unsupported listings/metrics remain n/a. All existing
+Nginx caching, ETags and slower browser polling apply to these fields too.

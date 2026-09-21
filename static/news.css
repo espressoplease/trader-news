@@ -322,7 +322,7 @@ and (max-width : 750px) {
 /* Native cache freshness labels. */
 .market-index-badge, .market-row-badge { color:#8b7b6c; font:7px monospace; white-space:nowrap; }
 .market-index-badge { margin-left:auto; }
-.market-constituent-legend, .market-constituent { grid-template-columns:minmax(0,1fr) 92px 48px 48px 62px 38px 42px 84px; }
+.market-constituent-legend, .market-constituent { grid-template-columns:minmax(0,1fr) 92px 48px 48px 92px 38px 42px 84px; }
 .market-row-badge { overflow:hidden; text-overflow:ellipsis; text-align:right; }
 
 .market-membership-note { color:#9a8b7c; font-size:8px; }

@@ -4,7 +4,7 @@
 The browser never calls Yahoo.  This process deliberately makes only one
 provider request at a time and keeps serving the last successful SQLite data.
 """
-import argparse, calendar, datetime, fcntl, json, os, sqlite3, subprocess, threading, time, logging, math, tempfile, hashlib
+import argparse, calendar, datetime, fcntl, json, os, sqlite3, subprocess, threading, time, logging, math, tempfile, hashlib, sys
 from contextlib import contextmanager
 from functools import lru_cache
 from email.utils import parsedate_to_datetime
@@ -15,6 +15,8 @@ from urllib.parse import parse_qs, quote, urlparse
 from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT / 'scripts'))
+from market_fundamentals import source_url, parse_statistics
 DATA = Path(os.environ.get("MARKET_DATA_DIR", ROOT / "arc/news/market"))
 DB_PATH = DATA / "market.sqlite3"
 UNIVERSE = ROOT / "static/market-data.js"
@@ -151,6 +153,8 @@ class Store:
             CREATE INDEX IF NOT EXISTS bars_range ON bars(symbol,interval,ts);
             CREATE TABLE IF NOT EXISTS history_state(symbol TEXT PRIMARY KEY,full_at INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS market_jobs(symbol TEXT,interval TEXT,period TEXT,requested_at INTEGER,PRIMARY KEY(symbol,interval));
+            CREATE TABLE IF NOT EXISTS fundamentals(symbol TEXT PRIMARY KEY,payload TEXT,fetched_at INTEGER,attempted_at INTEGER,next_due INTEGER DEFAULT 0,error TEXT,requested_at INTEGER DEFAULT 0);
+            CREATE TABLE IF NOT EXISTS fundamental_provider_state(key TEXT PRIMARY KEY,value INTEGER);
             CREATE TABLE IF NOT EXISTS corporate_actions(symbol TEXT,kind TEXT,ts INTEGER,payload TEXT,PRIMARY KEY(symbol,kind,ts));""")
             try: c.execute("ALTER TABLE instruments ADD COLUMN requested_range TEXT")
             except sqlite3.OperationalError: pass
@@ -166,6 +170,7 @@ class Store:
     def enqueue(self, symbol, range_='1d'):
         interval, period=RANGES.get(range_, RANGES['1d'])
         with self.lock, self.connect() as c:
+            c.execute("INSERT INTO fundamentals(symbol,requested_at) SELECT symbol,? FROM instruments WHERE symbol=? AND kind='company' ON CONFLICT(symbol) DO UPDATE SET requested_at=excluded.requested_at",(now(),symbol))
             full=c.execute("SELECT full_at FROM history_state WHERE symbol=?",(symbol,)).fetchone()
             last=c.execute("SELECT max(fetched_at) FROM bars WHERE symbol=? AND interval=? AND source='yahoo'",(symbol,interval)).fetchone()[0]
             ttl={'2m':120,'30m':600,'1d':900}[interval]
@@ -254,7 +259,7 @@ class Store:
             cutoff, expected_start=range_window(range_, quote_row)
             points=c.execute("SELECT ts,close FROM bars WHERE symbol=? AND interval=? AND ts>=? ORDER BY ts",(symbol,interval,cutoff)).fetchall()
             base=quote_baseline(c,symbol,range_,quote_row,cutoff)
-        return range_response(symbol, range_, quote_row, points, expected_start,base)
+        return self.with_fundamentals(range_response(symbol, range_, quote_row, points, expected_start,base))
     def quote(self,symbol,range_):
         # A quote needs only its first in-range close, never the complete chart.
         with self.connect() as c:
@@ -262,10 +267,41 @@ class Store:
             interval=range_interval(range_, quote_row, c, symbol)
             cutoff, expected_start=range_window(range_, quote_row)
             base=quote_baseline(c,symbol,range_,quote_row,cutoff)
-        return quote_response(symbol, range_, quote_row, base, expected_start)
+        return self.with_fundamentals(quote_response(symbol, range_, quote_row, base, expected_start))
+    def with_fundamentals(self, payload):
+        with self.connect() as c:
+            row=c.execute('SELECT * FROM fundamentals WHERE symbol=?',(payload['symbol'],)).fetchone()
+        values=json.loads(row['payload']) if row and row['payload'] else {}
+        payload.update(values)
+        payload['fundamentalsFetchedAt']=row['fetched_at'] if row else None
+        payload['fundamentalsError']=row['error'] if row else None
+        return payload
+
+    def next_fundamental(self):
+        with self.connect() as c:
+            paused=c.execute("SELECT value FROM fundamental_provider_state WHERE key='backoff_until'").fetchone()
+            if paused and paused[0]>now(): return None
+            return c.execute("SELECT i.symbol,i.provider_symbol FROM instruments i LEFT JOIN fundamentals f USING(symbol) WHERE i.kind='company' AND coalesce(f.next_due,0)<=? ORDER BY coalesce(f.requested_at,0) DESC, CASE WHEN i.symbol IN ('AAPL','MSFT','NVDA','AMD','META','AMZN','GOOGL','TSLA','HOOD','COIN') THEN 0 ELSE 1 END,coalesce(f.fetched_at,0),i.rowid LIMIT 1",(now(),)).fetchone()
+
+    def save_fundamental(self,symbol,values):
+        with self.lock,self.connect() as c:
+            c.execute("INSERT INTO fundamentals(symbol,payload,fetched_at,attempted_at,next_due,error) VALUES(?,?,?,?,?,NULL) ON CONFLICT(symbol) DO UPDATE SET payload=excluded.payload,fetched_at=excluded.fetched_at,attempted_at=excluded.attempted_at,next_due=excluded.next_due,error=NULL",(symbol,json.dumps(values),now(),now(),now()+86400))
+
+    def fail_fundamental(self,symbol,error):
+        status=getattr(error,'status',0)
+        listing_error=status in (301,302,404,422) or isinstance(error,ValueError)
+        delay=7*86400 if listing_error else 86400 if status==403 else max(900,getattr(error,'retry_after',0))
+        with self.lock,self.connect() as c:
+            c.execute("INSERT INTO fundamentals(symbol,attempted_at,next_due,error) VALUES(?,?,?,?) ON CONFLICT(symbol) DO UPDATE SET attempted_at=excluded.attempted_at,next_due=excluded.next_due,error=excluded.error",(symbol,now(),now()+delay,str(error)[:400]))
+            if not listing_error:
+                c.execute("INSERT OR REPLACE INTO fundamental_provider_state VALUES('backoff_until',?)",(now()+delay,))
+
     def health(self, worker=None):
         with self.connect() as c:
             instruments=c.execute('SELECT count(*) FROM instruments').fetchone()[0]
+            fundamental_count=c.execute('SELECT count(*) FROM fundamentals WHERE fetched_at IS NOT NULL').fetchone()[0]
+            fundamental_errors=c.execute('SELECT count(*) FROM fundamentals WHERE error IS NOT NULL').fetchone()[0]
+            fundamental_pause=c.execute("SELECT value FROM fundamental_provider_state WHERE key='backoff_until'").fetchone()
             quotes=c.execute('SELECT count(*) FROM latest_quotes WHERE price IS NOT NULL').fetchone()[0]
             histories=c.execute('SELECT count(*) FROM history_state').fetchone()[0]
             pending=c.execute('SELECT count(*) FROM market_jobs').fetchone()[0]
@@ -276,6 +312,7 @@ class Store:
         alive=bool(worker and worker.is_alive())
         return {'ok':bool(alive and last[0] and now()-last[0]<7200), 'workerAlive':alive,
                 'instruments':instruments,'quotes':quotes,'dailyHistories':histories,'warming':instruments-quotes,
+                'fundamentals':{'populated':fundamental_count,'errors':fundamental_errors,'backoffUntil':fundamental_pause[0] if fundamental_pause else 0,'refreshSecs':86400},
                 'pending':pending,'bars':sum(intervals.values()),'barsByInterval':intervals,
                 'dbBytes':sum(os.path.getsize(self.path+s) for s in ('','-wal') if os.path.exists(self.path+s)),
                 'lastSuccessAt':last[0],'lastAttemptAt':last[1],'fetchedWithinHour':fresh,'symbolsWithErrors':errors,
@@ -301,15 +338,19 @@ class Collector(threading.Thread):
         self.companies=deque(r[0] for r in companies)
         self.stop_event=threading.Event(); self.last_start=0.; self.backoff_until=0
         self.tick=0; self.requests=0; self.failures=0; self.consecutive_failures=0
-        self.last_symbol=None; self.last_error=None; self.last_prune=0
+        self.last_symbol=None; self.last_error=None; self.last_prune=0; self.fundamental_turn=0
 
     def fetch(self, provider, interval, period):
+        url='https://query1.finance.yahoo.com/v8/finance/chart/'+quote(provider,safe='^.-')+'?interval='+interval+'&range='+period+'&includePrePost=false&events=div%2Csplits'
+        log.info('scheduled symbol=%s interval=%s range=%s',provider,interval,period)
+        return parse_chart_json(self.request(url))
+
+    def request(self,url):
         delay=max(0,2-(time.monotonic()-self.last_start),self.backoff_until-time.time())
         if delay: self.stop_event.wait(delay)
         if self.stop_event.is_set(): raise InterruptedError('Collector stopping')
         self.last_start=time.monotonic(); self.requests+=1
-        url='https://query1.finance.yahoo.com/v8/finance/chart/'+quote(provider,safe='^.-')+'?interval='+interval+'&range='+period+'&includePrePost=false&events=div%2Csplits'
-        log.info('request symbol=%s interval=%s range=%s',provider,interval,period)
+        log.info('upstream request host=%s',urlparse(url).hostname)
         with tempfile.NamedTemporaryFile() as headers:
             p=subprocess.run(['curl','-4','--silent','--show-error','--max-time','20','-A','TraderNews/1.0 (+https://tradernews.fyi)','-D',headers.name,'-w','\n%{http_code}',url],capture_output=True,text=True)
             header_text=Path(headers.name).read_text()
@@ -323,8 +364,8 @@ class Collector(threading.Thread):
                 except ValueError:
                     try: retry=max(0,parsedate_to_datetime(value).timestamp()-time.time())
                     except Exception: pass
-        if status!=200: raise ProviderError('Yahoo HTTP '+str(status),status,retry)
-        return parse_chart_json(body)
+        if status!=200: raise ProviderError('Provider HTTP '+str(status),status,retry)
+        return body
 
     def next_task(self):
         self.tick+=1
@@ -361,6 +402,21 @@ class Collector(threading.Thread):
             try:
                 if now()-self.last_prune>3600:
                     self.store.prune(); self.last_prune=now()
+                self.fundamental_turn+=1
+                fundamental=self.store.next_fundamental() if self.fundamental_turn%3==0 else None
+                if fundamental:
+                    symbol=fundamental['symbol']; url=source_url(fundamental['provider_symbol'])
+                    try:
+                        if not url: raise ProviderError('Unsupported fundamentals listing',404)
+                        log.info('fundamentals scheduled symbol=%s',symbol)
+                        values=parse_statistics(self.request(url))
+                        values.update(fundamentalsSource='Stock Analysis',fundamentalsSourceUrl=url)
+                        self.store.save_fundamental(symbol,values)
+                        log.info('fundamentals success symbol=%s',symbol)
+                    except Exception as error:
+                        self.store.fail_fundamental(symbol,error)
+                        log.warning('fundamentals failure symbol=%s error=%s',symbol,error)
+                    continue
                 task=self.next_task()
                 if not task:
                     self.stop_event.wait(.1); continue
