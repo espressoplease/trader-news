@@ -192,7 +192,7 @@
                 (do
                   (w/lock market-feed-lock*
                     (= (market-feed-cache* (market-feed-entry-key symbol range))
-                       (obj symbol symbol range points points
+                       (obj symbol symbol range range points points
                             fetchedAt (seconds) attemptedAt (seconds)
                             status "live-delayed" source market-feed-provider*
                             error nil))
