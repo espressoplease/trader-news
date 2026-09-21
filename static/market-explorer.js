@@ -5,6 +5,18 @@
   var byKey = {}, state = { market:null, entity:null, range:'1d', filter:'all', sort:'move', limit:100, token:0, feeds:{}, quotes:{}, quotePromise:null };
   var pollTimer, visible = !document.hidden;
   markets.forEach(function (market) { byKey[market.key] = market; });
+  var viewStorageKey = 'trader-news.market-view.v1';
+  function savedView() {
+    try { var value = JSON.parse(localStorage.getItem(viewStorageKey)); return value && typeof value === 'object' ? value : {}; } catch (_) { return {}; }
+  }
+  function saveView() {
+    if (!state.market || !state.entity) return;
+    try { localStorage.setItem(viewStorageKey, JSON.stringify({
+      market:state.market.key, symbol:state.entity.symbol, range:state.range,
+      filter:state.filter, sort:state.sort, search:el('market-constituent-search').value,
+      collapsed:el('market-strip').classList.contains('is-collapsed')
+    })); } catch (_) { /* Browsing still works when storage is unavailable. */ }
+  }
   function el(id) { return document.getElementById(id); }
   function text(id, value) { var node = el(id); if (node) node.textContent = value; }
   function clean(points) { return (points || []).filter(function (p) { return p && finite(p.ts) && finite(p.close); }).map(function (p) { return {ts:+p.ts, close:+p.close}; }); }
@@ -118,7 +130,7 @@
     draw(points, entity.name); text('market-chart-caption', ranges[state.range] + ' price history · ' + (points.length ? new Date(points[0].ts).toLocaleDateString() + ' to ' + new Date(points[points.length-1].ts).toLocaleDateString() + ' · ' : '') + sourceLine(record)); text('market-source', sourceLine(record));
   }
   function selectEntity(entity) {
-    state.entity = entity; state.token++; var token = state.token; el('market-detail').className = 'market-detail';
+    state.entity = entity; saveView(); state.token++; var token = state.token; el('market-detail').className = 'market-detail';
     var companyPanel = el('market-company-detail'); document.querySelector('.market-detail-grid').classList.toggle('company-selected', entity.type === 'company');
     if (companyPanel) {
       companyPanel.className = companyPanel.className.replace(/\bnoshow\b/g, '') + (entity.type === 'company' ? '' : ' noshow');
@@ -137,10 +149,12 @@
       if (state.market === market && state.range === range) renderRows(entries);
     }).catch(function() { if (state.market === market && state.range === range) text('market-constituent-summary', 'Quote refresh unavailable. Previously received data is retained.'); });
   }
-  function loadMarket(market) {
+  function loadMarket(market, company) {
     state.market = market; state.limit = 100;
     document.querySelectorAll('.market-index').forEach(function(button) { button.classList.toggle('is-open', button.id === 'market-' + market.key); });
-    selectEntity({type:'index', name:market.name, symbol:market.symbol}); renderRows([]); updateRows(false);
+    if (company) loadCompany({ticker:company[0], name:company[1], quote:{}});
+    else selectEntity({type:'index', name:market.name, symbol:market.symbol});
+    renderRows([]); updateRows(false);
   }
   function loadCompany(row) { selectEntity({type:'company', name:row.name + ' (' + row.ticker + ')', symbol:row.ticker, quote:row.quote}); }
   function createRail() { document.querySelectorAll('.market-index').forEach(function (button) { var market = byKey[button.id.replace('market-', '')]; if (market) button.addEventListener('click', function () { loadMarket(market); }); }); }
@@ -162,10 +176,19 @@
   function init() {
     if (!el('market-strip') || !markets.length) return; createRail();
     Object.keys(ranges).forEach(function (range) { var button = el('market-range-' + range); if (button) button.addEventListener('click', function () { state.range = range; state.limit = 100; selectEntity(state.entity); renderRows([]); updateRows(false); }); });
-    ['all','gainers','losers'].forEach(function (filter) { var button = el('market-filter-' + filter); if (button) button.addEventListener('click', function () { state.filter = filter; document.querySelectorAll('.market-filter').forEach(function (b) { b.className = b.className.replace(/\bis-selected\b/g, '') + (b === button ? ' is-selected' : ''); }); updateRows(false); }); });
-    el('market-constituent-search').addEventListener('input', function () { updateRows(false); }); el('market-constituent-sort').addEventListener('click', function () { state.sort = state.sort === 'move' ? 'name' : state.sort === 'name' ? 'price' : 'move'; text('market-constituent-sort', 'sort: ' + state.sort); updateRows(false); }); el('market-show-more').addEventListener('click', function () { state.limit += 100; updateRows(false); });
-    el('market-toggle').addEventListener('click', function () { var strip = el('market-strip'), closed = /\bis-collapsed\b/.test(strip.className); strip.className = strip.className.replace(/\bis-collapsed\b/g, '') + (closed ? '' : ' is-collapsed'); this.textContent = closed ? 'collapse' : 'expand'; }); el('market-company-detail-close').addEventListener('click', function () { if (state.market) loadMarket(state.market); });
-    document.addEventListener('visibilitychange', function () { visible = !document.hidden; window.clearTimeout(pollTimer); if (visible) schedulePoll(Math.random() * 3000); }); refresh(); schedulePoll(); loadMarket(markets[0]);
+    ['all','gainers','losers'].forEach(function (filter) { var button = el('market-filter-' + filter); if (button) button.addEventListener('click', function () { state.filter = filter; saveView(); document.querySelectorAll('.market-filter').forEach(function (b) { b.className = b.className.replace(/\bis-selected\b/g, '') + (b === button ? ' is-selected' : ''); }); updateRows(false); }); });
+    el('market-constituent-search').addEventListener('input', function () { saveView(); updateRows(false); }); el('market-constituent-sort').addEventListener('click', function () { state.sort = state.sort === 'move' ? 'name' : state.sort === 'name' ? 'price' : 'move'; text('market-constituent-sort', 'sort: ' + state.sort); saveView(); updateRows(false); }); el('market-show-more').addEventListener('click', function () { state.limit += 100; updateRows(false); });
+    el('market-toggle').addEventListener('click', function () { var strip = el('market-strip'), closed = /\bis-collapsed\b/.test(strip.className); strip.className = strip.className.replace(/\bis-collapsed\b/g, '') + (closed ? '' : ' is-collapsed'); this.textContent = closed ? 'collapse' : 'expand'; saveView(); }); el('market-company-detail-close').addEventListener('click', function () { if (state.market) loadMarket(state.market); });
+    document.addEventListener('visibilitychange', function () { visible = !document.hidden; window.clearTimeout(pollTimer); if (visible) schedulePoll(Math.random() * 3000); }); var saved = savedView(), market = markets.find(function (m) { return m.key === saved.market; }) || markets[0];
+    if (Object.prototype.hasOwnProperty.call(ranges, saved.range)) state.range = saved.range;
+    if (['all','gainers','losers'].indexOf(saved.filter) >= 0) state.filter = saved.filter;
+    if (['move','name','price'].indexOf(saved.sort) >= 0) state.sort = saved.sort;
+    if (typeof saved.search === 'string') el('market-constituent-search').value = saved.search;
+    document.querySelectorAll('.market-filter').forEach(function (button) { button.classList.toggle('is-selected', button.id === 'market-filter-' + state.filter); });
+    text('market-constituent-sort', 'sort: ' + state.sort);
+    if (saved.collapsed === true) { el('market-strip').classList.add('is-collapsed'); text('market-toggle', 'expand'); }
+    var company = market.constituents.find(function (c) { return c[0] === saved.symbol; });
+    loadMarket(market, company); refresh(); schedulePoll();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
