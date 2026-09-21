@@ -50,6 +50,30 @@ be logged in as an admin.
 Set `DEV=t` (or run `(set autoreload*)` in the repl) to automatically
 reload code changes without restarting the server.
 
+## Curated market backlog
+
+Trader News includes a durable editorial queue for market, economics, policy,
+and industry links. Its initial seed is in `backlog.arc`; runtime queue state
+is stored under `arc/news/`, alongside the rest of the News data.
+
+On a fresh instance, the app publishes a random 20 seed items. It then adds
+one queued item every 40 minutes, which is 1.5 articles per hour. Automated
+items carry a `backlog` marker but receive no fabricated vote. When there are
+not enough genuinely upvoted stories for the homepage, recent backlog stories
+fill the remaining slots. The homepage also ends with the latest five
+submissions, including zero-vote items.
+
+Administrators can manage the queue at `/backlog`, including adding a link and
+publishing one immediately. From the Arc REPL or a future maintenance agent,
+use:
+
+```arc
+(backlog-add "A useful title" "https://example.com/article" "Source name")
+```
+
+Duplicate canonical URLs are ignored. `(backlog-publish-random 1)` publishes
+one pending item immediately, useful when editorially appropriate.
+
 For production deployments, instead of autoreload, you can manually
 `git pull` and then run `(reload)` in the repl to ship an update.
 (You could use autoreload in production, but then each request is

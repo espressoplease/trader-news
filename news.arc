@@ -8,15 +8,15 @@
 ; bug: somehow (+ votedir* nil) is getting evaluated.
 
 (let port (readenv "PORT" 8080)
-  (= this-site*    "HN Simulator"
+  (= this-site*    "Trader News"
      site-url*     "http://localhost:@port" ; no trailing slash
      hn-url*       "https://news.ycombinator.com"
      site-email*   "hn@@ycombinator.lol"
      parent-url*   "/"
      favicon-url*  ""
-     site-desc*    "Hacker News simulator" ; for rss feed
+     site-desc*    "Finance-focused Hacker News simulator" ; for rss feed
      site-color*   (color 170 170 230)
-     border-color* (color 170 170 230)))
+     border-color* (color 198 176 146)))
 
 
 ; Structures
@@ -111,10 +111,12 @@
 (def load-news ()
   (ensure-newsdirs)
   (load-userinfo)
+  (ensure-market-backlog)
   (unless stories*
     (load-item-buckets)
     (load-items initload*)
     (ensure-topstories))
+  (prime-market-backlog)
   (if (and initload-users* (empty profs*)) (load-users)))
 
 (def ensure-newsdirs ()
@@ -749,7 +751,8 @@
 
 ; Page Layout
 
-(= logo-url* "arc.png")
+(= logo-url* "trader-chart.svg")
+(= favicon-url* "trader-chart.svg")
 
 (unless (empty favicon-url*)
   (defopr favicon.ico favicon-url*))
@@ -766,6 +769,7 @@
        (gentag meta name "viewport" content "width=device-width, initial-scale=1.0")
        (gen-css-url)
        (gentag link rel "shortcut icon" href favicon-url*)
+       (tag (script src (static-src "market-data.js")))
        (tag (script src (static-src "hn.js")))
        (tag title (presc ,title)))
      (tag body 
@@ -852,6 +856,7 @@
       (pr (num elapsed 3 t t) " msec")
       (when (admin)
         (link "settings" "newsadmin")
+        (link "backlog" "backlog")
         (hook 'admin-bar whence)))))
 
 (def color-stripe (c)
@@ -880,6 +885,9 @@
 
 (= sand (color 246 246 239) textgray (gray 130))
 
+; The market strip spans the logo, navigation, and account cells below it.
+(attribute td colspan opnum)
+
 (def main-color ((t user me))
   (aif (and user (uvar user topcolor))
        (hex>color it)
@@ -893,28 +901,132 @@
 (def pagetop (switch lid label (o title) (o whence))
 ; (tr (tdcolor black (vspace 5)))
   (tr (tdcolor (main-color)
-        (tag (table border 0 cellpadding 0 cellspacing 0 width "100%"
+          (tag (table class "market-shell" border 0 cellpadding 0 cellspacing 0 width "100%"
                     style "padding:2px")
-          (tr (gen-logo)
+          (tag (colgroup)
+            (tag (col class "hn-logo-col"))
+            (tag (col class "hn-brand-col"))
+            (tag (col class "hn-account-col")))
+          (tag (tr)
+            (tag (td class "market-cell" colspan "3" style "padding:0 0 3px 0;")
+              (market-strip)))
+          (tag (tr class "hn-header-row") (gen-logo)
               (when (is switch 'full)
-                (tag (td style "line-height:12pt; height:10px;")
+                (tag (td class "hn-brand-cell" style "line-height:12pt; height:10px;")
                   (spanclass pagetop
                     (tag (b class 'hnname)
                       (link this-site* (site-or-hn-url)))
                     (toprow label))))
              (if (is switch 'full)
-                 (tag (td style "text-align:right;padding-right:4px;")
+                 (tag (td class "hn-account-cell" style "text-align:right;padding-right:4px;")
                    (spanclass pagetop (topright whence)))
                  (tag (td style "line-height:12pt; height:10px;")
                    (spanclass pagetop (prbold label))))))))
   (each f pagefns* (f))
   (spacerow 10))
 
+; Finance overview. This stays deliberately close to HN's compact header while
+; giving the finance edition one glanceable layer above the navigation.
+(attribute input placeholder opstring)
+(attribute div role opstring)
+(attribute span aria-live opstring)
+
+(def market-strip ()
+  (tag (div id "market-strip" class "market-strip")
+    (tag (div class "market-strip-head")
+      (tag (span class "market-strip-kicker") (pr "MARKETS"))
+      (tag (span class "market-strip-note") (pr "free delayed snapshot"))
+      (tag (span id "market-refresh" class "market-refresh") (pr "loading..."))
+      (tag (button id "market-toggle" class "market-toggle" type "button" title "Collapse market explorer")
+        (pr "collapse")))
+    (tag (div id "market-body" class "market-body")
+      (tag (div class "market-indexes")
+        (market-index-button "market-spx" "S&P 500" "^GSPC")
+        (market-index-button "market-nasdaq100" "Nasdaq-100" "^NDX")
+        (market-index-button "market-dow30" "Dow Jones" "^DJI")
+        (market-index-button "market-russell2000" "Russell 2000" "^RUT")
+        (market-index-button "market-ftse100" "FTSE 100" "^FTSE")
+        (market-index-button "market-dax" "DAX 40" "^GDAXI")
+        (market-index-button "market-cac40" "CAC 40" "^FCHI")
+        (market-index-button "market-eurostoxx50" "EURO STOXX 50" "^STOXX50E")
+        (market-index-button "market-nikkei225" "Nikkei 225" "^N225")
+        (market-index-button "market-hangseng" "Hang Seng" "^HSI")
+        (market-index-button "market-nifty50" "Nifty 50" "^NSEI")
+        (market-index-button "market-asx200" "ASX 200" "^AXJO")
+        (market-index-button "market-kospi" "KOSPI" "^KS11"))
+      (tag (div id "market-detail" class "market-detail noshow")
+      (tag (div class "market-detail-head")
+        (tag (div class "market-detail-title")
+          (tag (span id "market-detail-name") (pr "S&P 500"))
+          (tag (span id "market-detail-symbol" class "market-symbol") (pr "^GSPC")))
+        (tag (div class "market-detail-value")
+          (tag (span id "market-detail-last") (pr "--"))
+          (tag (span id "market-detail-change" class "market-change") (pr "--"))))
+      (tag (div class "market-detail-grid")
+        (tag (div class "market-chart-card")
+          (tag (div class "market-range-bar")
+            (tag (span class "market-card-label") (pr "performance"))
+            (tag (div id "market-ranges" class "market-ranges")
+              (market-range-button "1d" "1D")
+              (market-range-button "5d" "5D")
+              (market-range-button "1mo" "1M")
+              (market-range-button "3mo" "3M")
+              (market-range-button "6mo" "6M")
+              (market-range-button "ytd" "YTD")
+              (market-range-button "1y" "1Y")
+              (market-range-button "5y" "5Y")))
+          (tag (div id "market-chart" class "market-chart"))
+          (tag (div id "market-chart-caption" class "market-chart-caption")
+            (pr "Free public market data, may be delayed.")))
+        (tag (div id "market-company-detail" class "market-company-detail noshow")
+          (tag (div class "market-company-detail-head")
+            (tag (div id "market-company-detail-name" class "market-detail-title") (pr "Company detail"))
+            (tag (button id "market-company-detail-close" class "market-company-detail-close" type "button") (pr "close")))
+          (tag (div id "market-company-detail-meta" class "market-company-detail-meta") (pr ""))
+          (tag (div id "market-company-detail-metrics" class "market-company-detail-metrics")))
+        (tag (div class "market-constituents-card")
+          (tag (div class "market-constituents-head")
+            (tag (div class "market-card-label") (pr "Constituents"))
+            (tag (span id "market-constituent-count" class "market-count") (pr "--")))
+          (tag (div class "market-constituent-tools")
+            (tag (input id "market-constituent-search" type "text" placeholder "search company or ticker" autocomplete "off"))
+            (tag (button id "market-filter-all" class "market-filter is-selected" type "button") (pr "all"))
+            (tag (button id "market-filter-gainers" class "market-filter" type "button") (pr "gainers"))
+            (tag (button id "market-filter-losers" class "market-filter" type "button") (pr "losers"))
+            (tag (button id "market-constituent-sort" class "market-sort" type "button") (pr "sort: move")))
+          (tag (div class "market-constituent-legend")
+            (tag (span class "market-legend-company") (pr "company"))
+            (tag (span class "market-legend-price") (pr "price"))
+            (tag (span class "market-legend-move market-legend-day") (pr "day"))
+            (tag (span id "market-legend-range" class "market-legend-move market-legend-range") (pr "1M"))
+            (tag (span class "market-legend-cap") (pr "market cap"))
+            (tag (span class "market-legend-pe") (pr "P/E"))
+            (tag (span class "market-legend-yield") (pr "yield")))
+          (tag (div id "market-constituents" class "market-constituents"))
+          (tag (div class "market-constituent-foot")
+            (tag (span id "market-constituent-summary" aria-live "polite") (pr ""))
+            (tag (button id "market-show-more" class "market-show-more" type "button") (pr "show more")))))))
+    (tag (div class "market-strip-foot")
+      (tag (span id "market-source" aria-live "polite") (pr "Free public feed, local snapshot if unavailable"))
+      (tag (span id "market-regime" class "market-strip-hint") (pr "click an index to expand")))))
+
+(def market-index-button (id name symbol)
+  (tag (button id id class "market-index" type "button" title "Expand market details")
+    (tag (span class "market-index-name") (pr name))
+    (tag (span class "market-index-reading")
+      (tag (span class "market-index-last") (pr "--"))
+      (tag (span class "market-index-change") (pr "--")))))
+
+(def market-range-button (range label)
+  (tag (button class "market-range" type "button" title (+ "Show " label " performance")
+               id (+ "market-range-" range))
+    (pr label)))
+
 (def gen-logo ()
   (tag (td style "width:18px;padding-right:4px")
     (tag (a href parent-url*)
-      (tag (img src logo-url* width 18 height 18
-                style "border:1px #@(hexrep border-color*) solid; display:block;")))))
+      (tag (img class "trader-logo" src logo-url* width 18 height 18
+                style "display:block;")))))
 
 (or= toplabels* '(nil "welcome" "new" "threads" "past" "comments" "lists" "*"))
 
@@ -1020,6 +1132,8 @@
        (let ,g (string ',name)
          (shortpage nil ,g ,g ,g
            ,@body)))))
+
+(load "backlog.arc")
 
 
 ; News Admin
@@ -1283,16 +1397,20 @@
 ;(newsop index.html () (newspage "index.html"))
 
 (newscache newspage (whence) 90
-  (listpage (msec) (topstories maxend*) nil nil
-            (pageurl whence) t
-            [pageurl whence (+ (curpage) 1)]))
+  (w/the listpage-foot
+         (and (in whence "news" "")
+              (fn () (latest-home-stories-section)))
+    (listpage (msec) (home-stories maxend*) nil nil
+              (pageurl whence) t
+              [pageurl whence (+ (curpage) 1)])))
 
 (def listpage (t1 items label title (o url label) (o number t) (o moreurl) (o perpage perpage*))
   (hook 'listpage)
   (longpage t1 nil label title url
     (aif (the listpage-body) (it))
     (when items
-      (display-items items label title url number moreurl perpage))))
+      (display-items items label title url number moreurl perpage))
+    (aif (the listpage-foot) (it))))
 
 (def paginated (display items label title (o url label) (o number t) (o moreurl) (o perpage perpage*) (o colspan 2))
   (let (start end numstart items) (paginate items perpage)
@@ -1902,7 +2020,7 @@
                    (aand (cadr tail) it!id)))))
       (in onop "news" "")
        (w/the op onop
-         (whenlet s ((topstories maxend*) (- perpage* 1))
+         (whenlet s ((home-stories maxend*) (- perpage* 1))
            (list (tostring (display-item 1 s onop t)) nil)))))
 
 
