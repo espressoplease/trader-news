@@ -438,11 +438,11 @@ and (max-width : 750px) {
   }
 }
 
-.referral-banner { box-sizing:border-box; max-width:720px; margin:15px auto 20px; padding:14px 16px; background:#f0eefb; border:2px solid #aaaae6; border-radius:6px; color:#393357; text-align:left; font:12px Verdana,sans-serif; }
-.referral-banner p { margin:5px 0; }
+.referral-banner { box-sizing:border-box; max-width:720px; margin:15px auto 20px; padding:14px 16px; background:#f0eefb; border:1px solid #aaaae6; border-radius:0; color:#393357; text-align:left; font:12px Verdana,sans-serif; }
+.referral-banner p { margin:8px 0; line-height:1.5; }
 .referral-url { display:block; color:#51458a; overflow-wrap:anywhere; }
 .referral-rules { color:#655b7b; font-size:10px; line-height:1.5; }
-.referral-progress { color:#514865; }
+.referral-banner .referral-progress { margin:12px 0 0; color:#514865; }
 .community-analytics { max-width:720px; margin:15px auto; text-align:left; padding:0 10px; }
 .community-analytics h3 { font-size:12px; margin:0 0 5px; }
 .community-analytics img { width:100%; height:auto; display:block; }

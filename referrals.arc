@@ -90,15 +90,21 @@
               url (string site-url* "/?ref=" (urlencode user)))
         (tag (section class "referral-banner")
           (tag (strong) (pr "Share Trader News"))
-          (tag (p) (pr "Build the community by sharing Trader News."))
+          (tag (p)
+            (pr "Build the community by sharing Trader News. In return, earn extra starting points to help the stories and polls you post in future. Send your personal link to people who would enjoy the site. When someone opens Trader News through your link, their visit can count toward your sharing milestones."))
           (tag (a class "referral-url" href url) (presc url))
+          (tag (p)
+            (pr "At 1,000 credited visits, every new story or poll you post gets 1 extra starting point automatically, and a * appears beside your username. That means a post that normally starts with 1 point starts with 2. The star recognises your contribution to growing the community. You keep this benefit for future stories and polls; existing posts and comments do not receive the bonus."))
+          (tag (p)
+            (pr "At 10,000 visits, the bonus becomes 2 extra points per new story or poll and your username gets **. At 100,000, it becomes 3 extra points and ***. Each further tenfold milestone adds another point and star."))
+          (tag (p class "referral-rules")
+            (pr "To discourage repeated refreshing, only one visit from the same IP address counts per hour. Returning visitors can count again after an hour; your own visits do not count."))
           (tag (p class "referral-progress")
             (pr (num visits) " credited visits · "
                 (if (> tier 0) (string "+" tier " points on new posts · " (referral-stars user))
                     "First reward at 1,000 visits")
-                " · Next milestone: " (num next)))
-          (tag (p class "referral-rules")
-            (pr "1,000 visits: +1 point and *. 10,000: +2 points and **. 100,000: +3 points and ***, and so on. Bonuses apply to new posts, in addition to the normal starting point. One visit per IP per hour counts; your own visits do not.")))))))
+                " · Next milestone: " (num next))))))))
+
 
 (def referral-chart-svg ()
   (w/lock referral-lock*
