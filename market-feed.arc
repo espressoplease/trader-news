@@ -96,13 +96,13 @@
 (def market-feed-points (payload)
   (let result (aand payload!chart payload!chart!result (car it))
     (when result
-      (let quote (aand result!indicators result!indicators!quote (car it))
-        (when quote
+      (let quote-data (aand result!indicators result!indicators!quote (car it))
+        (when quote-data
           (let ts result!timestamp
-            (let closes quote!close
-              (let out nil
-                (while (and ts closes)
-                  (let close (market-feed-number (car closes))
+            (let closes quote-data!close
+                (let out nil
+                  (while (and ts closes)
+                    (let close (market-feed-number (car closes))
                     (when (and (car ts) close)
                       (push (obj ts (* (car ts) 1000)
                                  close close) out)))
