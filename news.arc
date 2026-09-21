@@ -822,6 +822,7 @@
 
 (def footer ()
   (referral-analytics)
+  (when (me) (referral-banner))
   (spanclass yclinks
     (w/bars
       (link "Guidelines"  "newsguidelines.html")
@@ -939,7 +940,6 @@
                    (spanclass pagetop (topright whence)))
                  (tag (td style "line-height:12pt; height:10px;")
                    (spanclass pagetop (prbold label))))))))
-  (when (me) (trtd (referral-banner)))
   (each f pagefns* (f))
   (spacerow 10))
 

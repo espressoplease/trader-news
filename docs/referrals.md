@@ -1,6 +1,6 @@
 # Community referrals and analytics
 
-Logged-in readers see a share banner with `/?ref=USERNAME`, their credited
+Logged-in readers see a purple share banner below the footer activity chart with `/?ref=USERNAME`, their credited
 visits, earned bonus and next milestone. Valid account usernames are resolved
 on the server. One IP can credit one referral in a rolling 3,600-second window,
 even across different referral links. Returning visitors may credit again after
