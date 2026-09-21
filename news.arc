@@ -107,6 +107,7 @@
 
 (def nsv ((o port (readenv "PORT" 8080)))
   (load-news)
+  (market-feed-start!)
   (serve port))
 
 (def load-news ()
@@ -936,7 +937,7 @@
   (tag (div id "market-strip" class "market-strip")
     (tag (div class "market-strip-head")
       (tag (span class "market-strip-kicker") (pr "MARKETS"))
-      (tag (span class "market-strip-note") (pr "free delayed snapshot"))
+      (tag (span class "market-strip-note") (pr "server-cached market data"))
       (tag (span id "market-refresh" class "market-refresh") (pr "loading..."))
       (tag (button id "market-toggle" class "market-toggle" type "button" title "Collapse market explorer")
         (pr "collapse")))
@@ -978,7 +979,7 @@
               (market-range-button "5y" "5Y")))
           (tag (div id "market-chart" class "market-chart"))
           (tag (div id "market-chart-caption" class "market-chart-caption")
-            (pr "Free public market data, may be delayed.")))
+            (pr "Server-cached market data, may be delayed.")))
         (tag (div id "market-company-detail" class "market-company-detail noshow")
           (tag (div class "market-company-detail-head")
             (tag (div id "market-company-detail-name" class "market-detail-title") (pr "Company detail"))
@@ -1008,7 +1009,7 @@
             (tag (span id "market-constituent-summary" aria-live "polite") (pr ""))
             (tag (button id "market-show-more" class "market-show-more" type "button") (pr "show more")))))))
     (tag (div class "market-strip-foot")
-      (tag (span id "market-source" aria-live "polite") (pr "Free public feed, local snapshot if unavailable"))
+      (tag (span id "market-source" aria-live "polite") (pr "Server cache warming, local snapshot if unavailable"))
       (tag (span id "market-regime" class "market-strip-hint") (pr "click an index to expand")))))
 
 (def market-index-button (id name symbol)
@@ -1135,6 +1136,7 @@
            ,@body)))))
 
 (load "backlog.arc")
+(load "market-feed.arc")
 
 
 ; News Admin

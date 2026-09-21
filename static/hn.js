@@ -151,8 +151,8 @@ function onclick (ev) {
 
 document.addEventListener("click", onclick);
 
-/* Finance market explorer. It starts from a local, labelled snapshot, then
-   lazily tries one free public history request for the selected index. */
+  /* Finance market explorer. The browser reads a shared server cache. The
+     server is the only component allowed to contact a market provider. */
 (function () {
   var marketData = window.FINANCE_MARKETS || [];
   var byKey = {};
@@ -188,15 +188,27 @@ document.addEventListener("click", onclick);
     var label = entity.kind == 'company' ? entity.symbol : entity.name;
     document.title = signedPct(isFinite(dayPct) ? dayPct : 0) + ' ' + label + ' | Trader News';
   }
+  function marketFeedUrl(symbol, range, all) {
+    return '/market-feed?' + (all ? 'all=1' : 'symbol=' + encodeURIComponent(symbol) + '&range=' + encodeURIComponent(range));
+  }
+  function feedAgeLabel(feed) {
+    return feed && (feed.ageLabel || feed.agelabel) ? (feed.ageLabel || feed.agelabel) : 'warming';
+  }
+  function feedSourceLabel(feed) {
+    if (!feed) return 'Server cache warming · local snapshot if unavailable';
+    if (feed.status == 'live-delayed') return 'Server cache · delayed feed · ' + feedAgeLabel(feed);
+    if (feed.status == 'stale') return 'Server cache · stale, last update ' + feedAgeLabel(feed);
+    return 'Server cache warming · local snapshot if unavailable';
+  }
   function refreshPageTitle() {
     if (!activeEntity || document.hidden) return;
     var entity = activeEntity;
-    fetch('https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(entity.symbol) + '?range=1d&interval=5m', {mode:'cors'}).then(function (response) {
+    fetch(marketFeedUrl(entity.symbol, '1d')).then(function (response) {
       if (!response.ok) throw new Error('title feed ' + response.status);
       return response.json();
     }).then(function (payload) {
       if (entity !== activeEntity) return;
-      var points = normalizeYahoo(payload);
+      var points = (payload.points || []).map(function (point) { return {ts:point.ts, close:point.close}; });
       if (points.length >= 2) updatePageTitle(entity, seriesStats(points).dayPct);
     }).catch(function () {});
   }
@@ -237,14 +249,14 @@ document.addEventListener("click", onclick);
   }
   function fetchMarketValues(item, range) {
     if (item.cache[range]) return item.cache[range];
-    var cfg = ranges[range] || ranges['1mo'];
-    item.cache[range] = fetch('https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(item.symbol) + '?range=' + cfg.api + '&interval=' + cfg.interval, {mode:'cors'}).then(function (response) {
+    item.cache[range] = fetch(marketFeedUrl(item.symbol, range)).then(function (response) {
       if (!response.ok) throw new Error('market feed ' + response.status);
       return response.json();
     }).then(function (payload) {
-      var points = normalizeYahoo(payload);
-      if (points.length < 2) throw new Error('no market values');
-      item.live = true;
+      item.marketFeed = payload;
+      var points = (payload.points || []).map(function (point) { return {ts:point.ts, close:point.close}; });
+      if (points.length < 2) return fallbackPoints(item, range);
+      item.live = payload.status == 'live-delayed';
       return points;
     }).catch(function () {
       item.live = false;
@@ -375,8 +387,8 @@ document.addEventListener("click", onclick);
       if (token != activeToken) return;
       entity.points[activeRange] = points;
       var stats = seriesStats(points); marketText(marketEl('market-detail-last'), marketNumber(stats.last)); setMarketChange(marketEl('market-detail-change'), stats.periodPct); renderChart(points, entity, activeRange); applyFocusRegime(entity.kind == 'company' && !entity.live ? entity.company.periodMove : stats.periodPct);
-      if (entity.kind == 'index') { updatePageTitle(entity, activeRange == '1d' ? stats.dayPct : seriesStats(fallbackPoints(entity, '1d')).dayPct); renderConstituents(item, points); marketText(marketEl('market-source'), entity.live ? 'Source: public Yahoo Finance chart feed, delayed; constituent moves estimated locally' : 'Free feed unavailable, using local snapshot'); }
-      else { if (entity.live) { entity.company.price = stats.last; entity.company.dayMove = stats.dayPct; entity.company.periodMove = stats.periodPct; entity.company.move = stats.periodPct; } updatePageTitle(entity, entity.company.dayMove); renderCompanyDetail(entity.company, item, stats, entity.live); renderConstituents(item, item.points && item.points[activeRange] ? item.points[activeRange] : fallbackPoints(item, activeRange)); marketText(marketEl('market-source'), entity.live ? 'Source: public Yahoo Finance chart feed, delayed; company fundamentals remain snapshot estimates' : 'Free feed unavailable, using local snapshot'); }
+      if (entity.kind == 'index') { updatePageTitle(entity, activeRange == '1d' ? stats.dayPct : seriesStats(fallbackPoints(entity, '1d')).dayPct); renderConstituents(item, points); marketText(marketEl('market-source'), feedSourceLabel(entity.marketFeed) + ' · constituent moves estimated locally'); }
+      else { if (entity.live) { entity.company.price = stats.last; entity.company.dayMove = stats.dayPct; entity.company.periodMove = stats.periodPct; entity.company.move = stats.periodPct; } updatePageTitle(entity, entity.company.dayMove); renderCompanyDetail(entity.company, item, stats, entity.live); renderConstituents(item, item.points && item.points[activeRange] ? item.points[activeRange] : fallbackPoints(item, activeRange)); marketText(marketEl('market-source'), feedSourceLabel(entity.marketFeed) + ' · fundamentals are snapshot estimates'); }
     });
   }
   function loadMarket(item) {
@@ -406,7 +418,21 @@ document.addEventListener("click", onclick);
     var more = marketEl('market-show-more'); if (more) more.addEventListener('click', function () { constituentLimit += 50; if (activeMarket) renderConstituents(activeMarket, activeMarket.points && activeMarket.points[activeRange] ? activeMarket.points[activeRange] : fallbackPoints(activeMarket, activeRange)); });
     var close = marketEl('market-company-detail-close'); if (close) close.addEventListener('click', function () { if (activeEntity && activeEntity.kind == 'company') loadMarket(activeEntity.item); else setshow(marketEl('market-company-detail'), false); });
     window.setInterval(refreshPageTitle, 60000);
-    marketText(marketEl('market-refresh'), marketData.length + ' indices · click to inspect');
+    marketText(marketEl('market-refresh'), marketData.length + ' indices · server cache warming');
+    fetch(marketFeedUrl('', '', true)).then(function (response) { return response.json(); }).then(function (payload) {
+      var entries = payload.entries || [], bySymbol = {};
+      aeach(function (entry) { bySymbol[entry.symbol] = entry; }, entries);
+      aeach(function (item) {
+        var entry = bySymbol[item.symbol];
+        if (!entry || !entry.points || entry.points.length < 2) return;
+        item.cache = item.cache || {};
+        item.cache['1d'] = Promise.resolve(entry.points.map(function (point) { return {ts:point.ts, close:point.close}; }));
+        item.marketFeed = entry; item.live = entry.status == 'live-delayed'; updateRail(item);
+      }, marketData);
+      var freshest = entries.filter(function (entry) { return entry.status == 'live-delayed'; }).sort(function (a, b) { return (a.ageSecs || a.agesecs || 0) - (b.ageSecs || b.agesecs || 0); })[0];
+      marketText(marketEl('market-refresh'), freshest ? 'server cache · ' + feedAgeLabel(freshest) : marketData.length + ' indices · warming');
+      marketText(marketEl('market-source'), freshest ? feedSourceLabel(freshest) : 'Server cache warming · local snapshot if unavailable');
+    }).catch(function () { marketText(marketEl('market-refresh'), marketData.length + ' indices · cache unavailable'); });
     loadMarket(marketData[0]);
   }
   if (document.readyState == 'loading') document.addEventListener('DOMContentLoaded', initMarkets); else initMarkets();

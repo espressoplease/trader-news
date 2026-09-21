@@ -1,0 +1,235 @@
+; Trader News market-feed cache.
+;
+; The browser reads this server-side cache instead of calling a provider
+; directly. A single conservative queue refreshes one provider request at a
+; time, persists the last good result, and serves stale data with a compact
+; freshness state when the provider is unavailable.
+
+(= market-feed-dir* (string newsdir* "market/")
+   market-feed-cache-file* (string newsdir* "market/market-cache.json")
+   market-feed-lock* (make-lock 30 "market-feed")
+   market-feed-cache* (table)
+   market-feed-queue* nil
+   market-feed-started* nil
+   market-feed-next-request-at* 0
+   market-feed-failures* 0
+   market-feed-backoff-until* 0
+   ; One upstream request every 30 seconds keeps the shared collector gentle.
+   ; A full 13-index pass therefore takes about 6.5 minutes.
+   market-feed-min-request-secs* 30
+   market-feed-provider* "Yahoo public chart endpoint")
+
+(= market-feed-ranges*
+   '(("1d" "5m" 300)
+    ("5d" "15m" 900)
+    ("1mo" "1d" 3600)
+    ("3mo" "1d" 86400)
+    ("6mo" "1d" 86400)
+    ("ytd" "1d" 86400)
+    ("1y" "1wk" 86400)
+    ("5y" "1mo" 86400)))
+
+; The complete market-data.js file remains the source of constituent metadata.
+; This list is deliberately only the small set of index symbols that power the
+; always-visible rail and the default background refresh queue.
+(= market-feed-index-symbols*
+   '(("spx" "S&P 500" "^GSPC")
+    ("nasdaq100" "Nasdaq-100" "^NDX")
+    ("dow30" "Dow Jones" "^DJI")
+    ("russell2000" "Russell 2000" "^RUT")
+    ("ftse100" "FTSE 100" "^FTSE")
+    ("dax" "DAX 40" "^GDAXI")
+    ("cac40" "CAC 40" "^FCHI")
+    ("eurostoxx50" "EURO STOXX 50" "^STOXX50E")
+    ("nikkei225" "Nikkei 225" "^N225")
+    ("hangseng" "Hang Seng" "^HSI")
+    ("nifty50" "Nifty 50" "^NSEI")
+    ("asx200" "ASX 200" "^AXJO")
+    ("kospi" "KOSPI" "^KS11")))
+
+(def market-feed-config (range)
+  (or (find [is (car _) range] market-feed-ranges*)
+      (car market-feed-ranges*)))
+
+(def market-feed-entry-key (symbol range)
+  (string symbol "|" range))
+
+(def market-feed-entry (symbol range)
+  (market-feed-cache* (market-feed-entry-key symbol range)))
+
+(def market-feed-age (entry)
+  (and entry entry!fetchedAt (- (seconds) entry!fetchedAt)))
+
+(def market-feed-fresh (entry range)
+  (and entry entry!points (> (len entry!points) 1)
+       (let cfg (market-feed-config range)
+         (and entry!fetchedAt (< (market-feed-age entry) (caddr cfg))))))
+
+(def market-feed-yahoo-url (symbol range)
+  (let cfg (market-feed-config range)
+    (string "https://query1.finance.yahoo.com/v8/finance/chart/"
+            (urlencode symbol)
+            "?range=" (urlencode (car cfg))
+            "&interval=" (urlencode (cadr cfg)))))
+
+(def market-feed-http (url)
+  (http-response url
+    (obj headers
+         (("User-Agent" "Trader-News-market-cache/1.0 (+https://tradernews.fyi)")
+          ("Accept" "application/json"))
+         timeout 15
+         maxtime 20)))
+
+(def market-feed-points (payload)
+  (let result (aand payload!chart payload!chart!result (car it))
+    (when result
+      (let quote (aand result!indicators result!indicators!quote (car it))
+        (when quote
+          (let ts result!timestamp
+            (let closes quote!close
+              (let out nil
+                (while (and ts closes)
+                  (when (and (car ts) (isa!num (car closes)))
+                    (push (obj ts (* (car ts) 1000)
+                               close (car closes)) out))
+                  (= ts (cdr ts)
+                     closes (cdr closes)))
+                (rev out)))))))))
+
+(def market-feed-persist! ()
+  (ensure-dir market-feed-dir*)
+  (save-json (obj version 1
+                 updatedAt (seconds)
+                 entries (vals market-feed-cache*))
+             market-feed-cache-file*))
+
+(def market-feed-load! ()
+  (ensure-dir market-feed-dir*)
+  (whenlet snapshot (and (file-exists market-feed-cache-file*)
+                         (errsafe:load-json market-feed-cache-file*))
+    (each entry (or snapshot!entries nil)
+      (when (and entry entry!symbol entry!range entry!points)
+        (= (market-feed-cache* (market-feed-entry-key entry!symbol entry!range)) entry)))))
+
+(def market-feed-queued? (symbol range)
+  (some [and (is (car _) symbol) (is (cadr _) range)] market-feed-queue*))
+
+(def market-feed-enqueue! (symbol range)
+  (when (and symbol range)
+    (w/lock market-feed-lock*
+      (unless (or (market-feed-queued? symbol range)
+                  (market-feed-fresh (market-feed-entry symbol range) range))
+        (push (list symbol range) market-feed-queue*)))))
+
+(def market-feed-error! (symbol range message)
+  (w/lock market-feed-lock*
+    (let old (market-feed-entry symbol range)
+      (= (market-feed-cache* (market-feed-entry-key symbol range))
+         (obj symbol symbol range range
+              points (or (and old old!points) 'empty)
+              fetchedAt (and old old!fetchedAt)
+              attemptedAt (seconds)
+              status (if (and old old!points) "stale" "unavailable")
+              source market-feed-provider*
+              error message)))
+    (market-feed-persist!)))
+
+(def market-feed-refresh! (symbol range)
+  (let response (errsafe:market-feed-http (market-feed-yahoo-url symbol range))
+    (if (and response (= response!status 200))
+        (let payload (errsafe:from-json response!body)
+          (let points (and payload (market-feed-points payload))
+            (if (> (len points) 1)
+                (do
+                  (w/lock market-feed-lock*
+                    (= (market-feed-cache* (market-feed-entry-key symbol range))
+                       (obj symbol symbol range points points
+                            fetchedAt (seconds) attemptedAt (seconds)
+                            status "live-delayed" source market-feed-provider*
+                            error nil))
+                    (market-feed-persist!))
+                  (= market-feed-failures* 0
+                     market-feed-backoff-until* 0)
+                  t)
+                (do
+                  (market-feed-error! symbol range "provider returned no usable points")
+                  nil))))
+        (do
+          (++ market-feed-failures*)
+          (= market-feed-backoff-until*
+             (+ (seconds) (min 3600 (* 60 (expt 2 (min 5 market-feed-failures*))))))
+          (market-feed-error! symbol range
+                              (if response
+                                  (string "provider HTTP " response!status)
+                                  "provider request failed"))
+          nil))))
+
+(def market-feed-poll! ()
+  (unless (> (seconds) market-feed-backoff-until*)
+    (unless (> market-feed-next-request-at* (seconds))
+      (let job nil
+        (w/lock market-feed-lock*
+          (when market-feed-queue*
+            (= job (pop market-feed-queue*))))
+        (when job
+          (= market-feed-next-request-at* (+ (seconds) market-feed-min-request-secs*))
+          (market-feed-refresh! (car job) (cadr job)))))))
+
+(def market-feed-prime! ()
+  (each entry market-feed-index-symbols*
+    (market-feed-enqueue! (car (cddr entry)) "1d"))
+  (market-feed-enqueue! "^GSPC" "1mo"))
+
+(def market-feed-start! ()
+  (unless market-feed-started*
+    (= market-feed-started* t)
+    (market-feed-load!)
+    (market-feed-prime!)))
+
+(def market-feed-age-label (age)
+  (if (no age) "warming"
+      (< age 60) "just now"
+      (< age 3600) (string (trunc (/ age 60)) "m ago")
+      (< age 86400) (string (trunc (/ age 3600)) "h ago")
+                         (string (trunc (/ age 86400)) "d ago")))
+
+(def market-feed-public-entry (entry range)
+  (let age (market-feed-age entry)
+    (obj symbol (and entry entry!symbol)
+         range range
+         points (or (and entry entry!points) 'empty)
+         fetchedAt (and entry entry!fetchedAt)
+         ageSecs age
+         ageLabel (market-feed-age-label age)
+         status (if (and entry (market-feed-fresh entry range))
+                    "live-delayed"
+                    (if (and entry entry!points) "stale" "warming"))
+         pending (and entry (market-feed-queued? entry!symbol range))
+         source market-feed-provider*
+         error (and entry entry!error))))
+
+(def market-feed-all-response ()
+  (obj ok t serverTime (seconds) source market-feed-provider*
+       interval "1d rail snapshots"
+       entries (map [market-feed-public-entry _ "1d"]
+                    (keep [and _!symbol (is _!range "1d")] (vals market-feed-cache*)))))
+
+(def market-feed-response ()
+  (market-feed-start!)
+  (if arg!all
+      (market-feed-all-response)
+      (let symbol (or arg!symbol "^GSPC")
+        (let range (or arg!range "1mo")
+          (let entry (market-feed-entry symbol range)
+            (unless (market-feed-fresh entry range)
+              (market-feed-enqueue! symbol range))
+            (market-feed-public-entry entry range))))))
+
+(defopr market-feed
+  (responding type-header*!json
+    (prheader "Cache-Control" "no-store")
+    (prn)
+    (to-json (market-feed-response))))
+
+(defbg market-feed 15
+  (market-feed-poll!))
