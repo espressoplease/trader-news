@@ -204,7 +204,7 @@
          ageLabel (market-feed-age-label age)
          status (if (and entry (market-feed-fresh entry range))
                     "live-delayed"
-                    (if (and entry entry!points) "stale" "warming"))
+                    (if (and entry (acons entry!points)) "stale" "unavailable"))
          pending (and entry (market-feed-queued? entry!symbol range))
          source market-feed-provider*
          error (and entry entry!error))))
