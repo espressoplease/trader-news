@@ -104,15 +104,12 @@
                 (let mfp-quote-data (car mfp-quotes)
                   (let mfp-ts (mfp-result 'timestamp)
                     (let mfp-closes (mfp-quote-data 'close)
-                      (let out nil
-                        (while (and mfp-ts mfp-closes)
-                          (let mfp-close (market-feed-number (car mfp-closes))
-                            (when (and (car mfp-ts) mfp-close)
-                              (push (obj ts (* (car mfp-ts) 1000)
-                                         close mfp-close) out)))
-                          (= mfp-ts (cdr mfp-ts)
-                             mfp-closes (cdr mfp-closes)))
-                        (rev out)))))))))))))
+                      (map (fn (mfp-t mfp-c)
+                             (let mfp-close (market-feed-number mfp-c)
+                               (and mfp-t mfp-close
+                                    (obj ts (* mfp-t 1000)
+                                         close mfp-close)))
+                           mfp-ts mfp-closes)))))))))))))
 
 (def market-feed-persist! ()
   (ensure-dir market-feed-dir*)
