@@ -9,7 +9,8 @@
 
 (let port (readenv "PORT" 8080)
   (= this-site*    "Trader News"
-     site-url*     "http://localhost:@port" ; no trailing slash
+     site-url*     (or (readenv "SITE_URL" nil)
+                       "http://localhost:@port") ; no trailing slash
      hn-url*       "https://news.ycombinator.com"
      site-email*   "hn@@ycombinator.lol"
      parent-url*   "/"
