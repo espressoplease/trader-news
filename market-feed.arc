@@ -83,8 +83,8 @@
 (def market-feed-http (url)
   (http-response url
     (obj headers
-         (("User-Agent" "Trader-News-market-cache/1.0 (+https://tradernews.fyi)")
-          ("Accept" "application/json"))
+         (list (list "User-Agent" "Trader-News-market-cache/1.0 (+https://tradernews.fyi)")
+               (list "Accept" "application/json"))
          timeout 15
          maxtime 20)))
 
