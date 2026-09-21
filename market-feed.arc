@@ -7,6 +7,7 @@
 
 (= market-feed-dir* (string newsdir* "market/")
    market-feed-cache-file* (string newsdir* "market/market-cache.json")
+   market-feed-state-file* (string newsdir* "market/market-feed-state.json")
    market-feed-lock* (make-lock 30 "market-feed")
    market-feed-cache* (table)
    market-feed-queue* nil
@@ -14,6 +15,13 @@
    market-feed-next-request-at* 0
    market-feed-failures* 0
    market-feed-backoff-until* 0
+   market-feed-last-tick-at* 0
+   market-feed-last-attempt-at* 0
+   market-feed-last-success-at* 0
+   market-feed-last-error* nil
+   market-feed-last-symbol* nil
+   market-feed-last-provider-status* "not-attempted"
+   market-feed-poll-runs* 0
    ; One upstream request every 30 seconds keeps the shared collector gentle.
    ; A full 13-index pass therefore takes about 6.5 minutes.
    market-feed-min-request-secs* 30
@@ -103,6 +111,22 @@
                  entries (vals market-feed-cache*))
              market-feed-cache-file*))
 
+(def market-feed-persist-state! ()
+  (ensure-dir market-feed-dir*)
+  (save-json (obj version 1
+                 updatedAt (seconds)
+                 lastTickAt market-feed-last-tick-at*
+                 lastAttemptAt market-feed-last-attempt-at*
+                 lastSuccessAt market-feed-last-success-at*
+                 lastError market-feed-last-error*
+                 lastSymbol market-feed-last-symbol*
+                 lastProviderStatus market-feed-last-provider-status*
+                 pollRuns market-feed-poll-runs*
+                 failures market-feed-failures*
+                 backoffUntil market-feed-backoff-until*
+                 nextRequestAt market-feed-next-request-at*)
+             market-feed-state-file*))
+
 (def market-feed-load! ()
   (ensure-dir market-feed-dir*)
   (whenlet snapshot (and (file-exists market-feed-cache-file*)
@@ -110,6 +134,18 @@
     (each entry (or snapshot!entries nil)
       (when (and entry entry!symbol entry!range entry!points)
         (= (market-feed-cache* (market-feed-entry-key entry!symbol entry!range)) entry)))))
+  (whenlet state (and (file-exists market-feed-state-file*)
+                      (errsafe:load-json market-feed-state-file*))
+    (= market-feed-last-tick-at* (or state!lastTickAt 0)
+       market-feed-last-attempt-at* (or state!lastAttemptAt 0)
+       market-feed-last-success-at* (or state!lastSuccessAt 0)
+       market-feed-last-error* state!lastError
+       market-feed-last-symbol* state!lastSymbol
+       market-feed-last-provider-status* (or state!lastProviderStatus "not-attempted")
+       market-feed-poll-runs* (or state!pollRuns 0)
+       market-feed-failures* (or state!failures 0)
+       market-feed-backoff-until* (or state!backoffUntil 0)
+       market-feed-next-request-at* (or state!nextRequestAt 0)))
 
 (def market-feed-queued? (symbol range)
   (some [and (is (car _) symbol) (is (cadr _) range)] market-feed-queue*))
@@ -122,6 +158,8 @@
         (push (list symbol range) market-feed-queue*)))))
 
 (def market-feed-error! (symbol range message)
+  (= market-feed-last-error* message
+     market-feed-last-provider-status* message)
   (w/lock market-feed-lock*
     (let old (market-feed-entry symbol range)
       (= (market-feed-cache* (market-feed-entry-key symbol range))
@@ -132,9 +170,13 @@
               status (if (and old old!points) "stale" "unavailable")
               source market-feed-provider*
               error message)))
-    (market-feed-persist!)))
+    (market-feed-persist!))
+  (market-feed-persist-state!))
 
 (def market-feed-refresh! (symbol range)
+  (= market-feed-last-attempt-at* (seconds)
+     market-feed-last-symbol* symbol)
+  (market-feed-persist-state!)
   (let response (errsafe:market-feed-http (market-feed-yahoo-url symbol range))
     (if (and response (= response!status 200))
         (let payload (errsafe:from-json response!body)
@@ -149,7 +191,11 @@
                             error nil))
                     (market-feed-persist!))
                   (= market-feed-failures* 0
-                     market-feed-backoff-until* 0)
+                     market-feed-backoff-until* 0
+                     market-feed-last-success-at* (seconds)
+                     market-feed-last-error* nil
+                     market-feed-last-provider-status* "ok")
+                  (market-feed-persist-state!)
                   t)
                 (do
                   (market-feed-error! symbol range "provider returned no usable points")
@@ -166,6 +212,11 @@
 
 (def market-feed-poll! ()
   (let now (seconds)
+    (++ market-feed-poll-runs*)
+    (= market-feed-last-tick-at* now)
+    ; Persisting this small state record makes the scheduler observable after
+    ; restarts. The cache itself is still written only on fetches/errors.
+    (market-feed-persist-state!)
     (when (and (>= now market-feed-backoff-until*)
                (>= now market-feed-next-request-at*))
       (let job nil
@@ -174,6 +225,7 @@
             (= job (pop market-feed-queue*))))
         (when job
           (= market-feed-next-request-at* (+ now market-feed-min-request-secs*))
+          (market-feed-persist-state!)
           (market-feed-refresh! (car job) (cadr job)))))))
 
 (def market-feed-prime! ()
@@ -215,6 +267,36 @@
        entries (map [market-feed-public-entry _ _!range]
                     (keep [and _!symbol _!range] (vals market-feed-cache*)))))
 
+(def market-feed-health-response ()
+  (let now (seconds)
+    (let poller-healthy (and market-feed-started*
+                             market-feed-last-tick-at*
+                             (< (- now market-feed-last-tick-at*) 45))
+      (let provider-healthy (and market-feed-last-success-at*
+                                 (< (- now market-feed-last-success-at*) 7200))
+        (obj ok (and poller-healthy provider-healthy)
+             pollerHealthy poller-healthy
+             providerHealthy provider-healthy
+             poller "in-process background thread"
+             serverTime now
+             lastTickAt market-feed-last-tick-at*
+             lastAttemptAt market-feed-last-attempt-at*
+             lastSuccessAt market-feed-last-success-at*
+             lastError market-feed-last-error*
+             lastSymbol market-feed-last-symbol*
+             providerStatus market-feed-last-provider-status*
+             queueDepth (len market-feed-queue*)
+             failureCount market-feed-failures*
+             backoffUntil market-feed-backoff-until*
+             backoffSecs (max 0 (- market-feed-backoff-until* now))
+             nextRequestAt market-feed-next-request-at*
+             pollRuns market-feed-poll-runs*
+             requestSpacingSecs market-feed-min-request-secs*
+             provider market-feed-provider*
+             cacheEntries (len (vals market-feed-cache*))
+             indexSymbols (len market-feed-index-symbols*)
+             note "Index charts are cached by the poller. Constituent quote and fundamental rows require a working provider feed.")))))
+
 (def market-feed-response ()
   (market-feed-start!)
   (if arg!all
@@ -231,6 +313,13 @@
     (prheader "Cache-Control" "no-store")
     (prn)
     (to-json (market-feed-response))))
+
+(defopr market-feed-health
+  (responding type-header*!json
+    (prheader "Cache-Control: no-store")
+    (prn)
+    (market-feed-start!)
+    (to-json (market-feed-health-response))))
 
 (defbg market-feed 15
   (market-feed-poll!))
