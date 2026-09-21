@@ -76,8 +76,7 @@
 
   function description(symbol, name, marketName) {
     var sector = inferSector(symbol, name);
-    var suffix = marketName ? ' It is tracked here as a ' + marketName + ' constituent.' : '.';
-    return String(name || symbol) + ' operates in ' + sector + '.' + suffix;
+    return String(name || symbol) + ' operates in ' + sector + '.';
   }
 
   function irDestination(symbol, name) {
