@@ -71,7 +71,7 @@
 (def market-feed-fresh (entry range)
   (and entry entry!points (acons entry!points) (> (len entry!points) 1)
        (let cfg (market-feed-config range)
-         (and entry!fetchedAt (< (market-feed-age entry) (caddr cfg))))))
+         (and entry!fetchedAt (< (market-feed-age entry) (car (cddr cfg)))))))
 
 (def market-feed-yahoo-url (symbol range)
   (let cfg (market-feed-config range)
