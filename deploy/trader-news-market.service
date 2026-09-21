@@ -1,0 +1,16 @@
+[Unit]
+Description=Trader News local Yahoo market collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/deploy/apps/trader-news
+User=deploy
+Environment=MARKET_DATA_DIR=arc/news/market
+ExecStart=/usr/bin/python3 scripts/market_service.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

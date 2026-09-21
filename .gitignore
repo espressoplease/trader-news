@@ -17,3 +17,6 @@
 /*.txt
 /*.html
 /*.clj
+
+# Python collector/test bytecode
+__pycache__/

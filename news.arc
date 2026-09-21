@@ -107,7 +107,6 @@
 
 (def nsv ((o port (readenv "PORT" 8080)))
   (load-news)
-  (market-feed-start!)
   (serve port))
 
 (def load-news ()
@@ -773,6 +772,7 @@
        (gentag link rel "shortcut icon" href favicon-url*)
        (tag (script src (static-src "market-data.js")))
        (tag (script src (static-src "hn.js")))
+       (tag (script src (static-src "market-explorer.js")))
        (tag title (presc ,title)))
      (tag body 
        (center
@@ -937,7 +937,7 @@
   (tag (div id "market-strip" class "market-strip")
     (tag (div class "market-strip-head")
       (tag (span class "market-strip-kicker") (pr "MARKETS"))
-      (tag (span class "market-strip-note") (pr "server-cached market data"))
+      (tag (span class "market-strip-note") (pr "server-cached market data, may be delayed"))
       (tag (span id "market-refresh" class "market-refresh") (pr "loading..."))
       (tag (button id "market-toggle" class "market-toggle" type "button" title "Collapse market explorer")
         (pr "collapse")))
@@ -989,7 +989,8 @@
         (tag (div class "market-constituents-card")
           (tag (div class "market-constituents-head")
             (tag (div class "market-card-label") (pr "Constituents"))
-            (tag (span id "market-constituent-count" class "market-count") (pr "--")))
+            (tag (span id "market-constituent-count" class "market-count") (pr "--"))
+            (tag (span class "market-membership-note") (pr "curated constituents")))
           (tag (div class "market-constituent-tools")
             (tag (input id "market-constituent-search" type "text" placeholder "search company or ticker" autocomplete "off"))
             (tag (button id "market-filter-all" class "market-filter is-selected" type "button") (pr "all"))
@@ -1003,13 +1004,14 @@
             (tag (span id "market-legend-range" class "market-legend-move market-legend-range") (pr "1M"))
             (tag (span class "market-legend-cap") (pr "market cap"))
             (tag (span class "market-legend-pe") (pr "P/E"))
-            (tag (span class "market-legend-yield") (pr "yield")))
+            (tag (span class "market-legend-yield") (pr "yield"))
+            (tag (span class "market-legend-freshness") (pr "price age")))
           (tag (div id "market-constituents" class "market-constituents"))
           (tag (div class "market-constituent-foot")
             (tag (span id "market-constituent-summary" aria-live "polite") (pr ""))
             (tag (button id "market-show-more" class "market-show-more" type "button") (pr "show more")))))))
     (tag (div class "market-strip-foot")
-      (tag (span id "market-source" aria-live "polite") (pr "Server cache warming, local snapshot if unavailable"))
+      (tag (span id "market-source" aria-live "polite") (pr "Server cache warming. Prices may be delayed."))
       (tag (span id "market-regime" class "market-strip-hint") (pr "click an index to expand")))))
 
 (def market-index-button (id name symbol)
