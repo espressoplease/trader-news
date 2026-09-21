@@ -75,3 +75,30 @@ sets `Vary: Accept-Encoding`; private application routes retain their existing
 configuration. Update the snippet with the repository version, run
 `sudo nginx -t`, and reload Nginx after changes. The pre-compression site config
 is backed up at `/tmp/trader-news-nginx.pre-market-gzip.conf` on the server.
+
+
+## Shared polling cache
+
+Install `deploy/trader-news-market-cache.nginx.conf` at
+`/etc/nginx/conf.d/trader-news-market-cache.conf` (HTTP context), and install
+`deploy/trader-news-market.nginx.conf` as the existing HTTPS server snippet.
+Create `/var/cache/nginx/trader-news-market` owned by `www-data` first. Test with
+`sudo nginx -t` before reloading. Roll back both configuration files together.
+
+The two public data routes go directly to loopback port 8766. Nginx caches
+successful responses for 20 seconds, coalesces concurrent cache misses and
+refreshes expired entries in the background. Health and errors are never cached.
+Cookies and authorization headers are not forwarded on these public routes.
+News, accounts, votes and other application routes retain their existing behavior.
+
+The frontend requests one reusable company snapshot per index/range, polls at
+random 40-55 second intervals while visible, and staggers tab-return refreshes.
+ETags allow unchanged responses to return 304 without another response body.
+`X-Market-Cache` exposes HIT, MISS, STALE, UPDATING or REVALIDATED for verification;
+health always reports BYPASS. The provider still has one global two-second gate.
+
+Production Nginx worker_connections is raised from 768 to 16384 per worker;
+its existing systemd file-descriptor limit is 524288. The Trader News HTTPS
+server uses a 15-second idle keepalive timeout to free idle polling sockets.
+These changes provide connection headroom, not a claim of tested 20k capacity.
+A separate representative load test is still needed before that guarantee.

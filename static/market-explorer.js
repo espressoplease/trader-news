@@ -28,11 +28,11 @@
   }
   function getQuotes(market, fresh) {
     if (!market) return Promise.resolve([]);
-    var symbols = market.constituents.map(function (c) { return c[0]; }), key = market.key + '|' + state.range;
+    var key = market.key + '|' + state.range;
     var cached = state.quotes[key];
     if (!fresh && cached && cached.data && Date.now() - cached.savedAt < 30000) return Promise.resolve(cached.data);
     if (cached && cached.promise) return cached.promise;
-    var request = fetch('/market-quotes?symbols=' + encodeURIComponent(symbols.join(',')) + '&range=' + encodeURIComponent(state.range), {credentials:'same-origin'}).then(function (response) { if (!response.ok) throw Error(String(response.status)); return response.json(); }).then(function (data) { var entries = data.entries || []; state.quotes[key] = {data:entries, savedAt:Date.now()}; return entries; }).catch(function (error) { delete state.quotes[key]; throw error; });
+    var request = fetch('/market-quotes?market=' + encodeURIComponent(market.key) + '&range=' + encodeURIComponent(state.range), {credentials:'same-origin'}).then(function (response) { if (!response.ok) throw Error(String(response.status)); return response.json(); }).then(function (data) { var entries = data.entries || []; state.quotes[key] = {data:entries, savedAt:Date.now()}; return entries; }).catch(function (error) { delete state.quotes[key]; throw error; });
     state.quotes[key] = {promise:request, savedAt:Date.now()}; return request;
   }
   function stats(points) { points = clean(points); if (points.length < 2) return {}; var first = points[0].close, last = points[points.length - 1].close; return {last:last, move:first ? ((last - first) / first * 100) : null, low:Math.min.apply(null, points.map(function (p) { return p.close; })), high:Math.max.apply(null, points.map(function (p) { return p.close; }))}; }
@@ -127,13 +127,21 @@
     if (market) getQuotes(market, fresh).then(function (entries) { if (state.market === market && state.range === range) renderRows(entries); }).catch(function () {});
     if (entity) getFeed(entity.symbol, range, fresh).then(function (record) { if (state.entity === entity && state.range === range) renderDetail(entity, record); }).catch(function () {});
   }
+  function schedulePoll(delay) {
+    window.clearTimeout(pollTimer);
+    if (!visible) return;
+    pollTimer = window.setTimeout(function () {
+      refresh(true);
+      schedulePoll();
+    }, delay === undefined ? 40000 + Math.random() * 15000 : delay);
+  }
   function init() {
     if (!el('market-strip') || !markets.length) return; createRail();
     Object.keys(ranges).forEach(function (range) { var button = el('market-range-' + range); if (button) button.addEventListener('click', function () { state.range = range; state.limit = 100; selectEntity(state.entity); renderRows([]); updateRows(false); }); });
     ['all','gainers','losers'].forEach(function (filter) { var button = el('market-filter-' + filter); if (button) button.addEventListener('click', function () { state.filter = filter; document.querySelectorAll('.market-filter').forEach(function (b) { b.className = b.className.replace(/\bis-selected\b/g, '') + (b === button ? ' is-selected' : ''); }); updateRows(false); }); });
     el('market-constituent-search').addEventListener('input', function () { updateRows(false); }); el('market-constituent-sort').addEventListener('click', function () { state.sort = state.sort === 'move' ? 'name' : state.sort === 'name' ? 'price' : 'move'; text('market-constituent-sort', 'sort: ' + state.sort); updateRows(false); }); el('market-show-more').addEventListener('click', function () { state.limit += 100; updateRows(false); });
     el('market-toggle').addEventListener('click', function () { var strip = el('market-strip'), closed = /\bis-collapsed\b/.test(strip.className); strip.className = strip.className.replace(/\bis-collapsed\b/g, '') + (closed ? '' : ' is-collapsed'); this.textContent = closed ? 'collapse' : 'expand'; }); el('market-company-detail-close').addEventListener('click', function () { if (state.market) loadMarket(state.market); });
-    document.addEventListener('visibilitychange', function () { visible = !document.hidden; if (visible) refresh(true); }); refresh(); pollTimer = window.setInterval(function () { refresh(true); }, 45000); loadMarket(markets[0]);
+    document.addEventListener('visibilitychange', function () { visible = !document.hidden; window.clearTimeout(pollTimer); if (visible) schedulePoll(Math.random() * 3000); }); refresh(); schedulePoll(); loadMarket(markets[0]);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

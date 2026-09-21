@@ -4,7 +4,7 @@
 The browser never calls Yahoo.  This process deliberately makes only one
 provider request at a time and keeps serving the last successful SQLite data.
 """
-import argparse, calendar, datetime, fcntl, json, os, sqlite3, subprocess, threading, time, logging, math, tempfile
+import argparse, calendar, datetime, fcntl, json, os, sqlite3, subprocess, threading, time, logging, math, tempfile, hashlib
 from contextlib import contextmanager
 from functools import lru_cache
 from email.utils import parsedate_to_datetime
@@ -390,7 +390,13 @@ def import_legacy(store, legacy):
         with store.lock, store.connect() as c: c.executemany('INSERT OR IGNORE INTO bars(symbol,interval,ts,open,high,low,close,adj_close,volume,fetched_at,source) VALUES(?,?,?,?,?,?,?,?,?,?,?)',rows); count+=len(rows)
     return count
 
-def make_handler(store, rows, indexes, worker):
+def market_memberships(path=UNIVERSE):
+    source=Path(path).read_text().split('window.FINANCE_MARKETS =',1)[1].lstrip()
+    markets,_=json.JSONDecoder().raw_decode(source)
+    return {m['key']:tuple(sorted(set(c[0] for c in m['constituents']))) for m in markets}
+
+def make_handler(store, rows, indexes, worker, memberships=None):
+    memberships=market_memberships() if memberships is None else memberships
     @lru_cache(maxsize=32)
     def cached_quotes(symbols, range_, bucket):
         return {'entries':[store.quote(symbol,range_) for symbol in symbols]}
@@ -398,18 +404,33 @@ def make_handler(store, rows, indexes, worker):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,*a): pass
         def respond(self,obj,code=200):
-            raw=json.dumps(obj,separators=(',',':')).encode(); self.send_response(code); self.send_header('Content-Type','application/json'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(raw))); self.end_headers(); self.wfile.write(raw)
+            raw=json.dumps(obj,separators=(',',':')).encode()
+            cacheable=code==200 and urlparse(self.path).path in ('/market-feed','/market-quotes')
+            etag='"'+hashlib.sha256(raw).hexdigest()+'"'
+            matches=[tag.strip().removeprefix('W/') for tag in self.headers.get('If-None-Match','').split(',')]
+            unchanged=cacheable and (etag in matches or '*' in matches)
+            self.send_response(304 if unchanged else code)
+            self.send_header('Content-Type','application/json')
+            self.send_header('Cache-Control','public, max-age=0, s-maxage=20' if cacheable else 'no-store')
+            if cacheable: self.send_header('ETag',etag)
+            if not unchanged: self.send_header('Content-Length',str(len(raw)))
+            self.end_headers()
+            if not unchanged and self.command!='HEAD': self.wfile.write(raw)
+        def do_HEAD(self):
+            self.do_GET()
         def do_GET(self):
             u=urlparse(self.path); q=parse_qs(u.query)
             if u.path=='/market-feed-health': return self.respond(store.health(worker))
             if u.path=='/market-feed':
                 if q.get('all',[''])[0]: return self.respond(cached_quotes(tuple(indexes),'1d',now()//5))
-                s=q.get('symbol',[''])[0];
+                s=q.get('symbol',['^GSPC'])[0];
                 if s not in rows: return self.respond({'status':'unknown','error':'unknown symbol'},404)
                 store.enqueue(s,q.get('range',['1d'])[0]); return self.respond(store.feed(s,q.get('range',['1d'])[0]))
             if u.path=='/market-quotes':
                 rr=q.get('range',['3mo'])[0]
-                symbols=tuple(sorted(set(q.get('symbols',[''])[0].split(',')) & rows.keys()))
+                market=q.get('market',[''])[0]
+                if market and market not in memberships: return self.respond({'error':'unknown market'},404)
+                symbols=memberships[market] if market else tuple(sorted(set(q.get('symbols',[''])[0].split(',')) & rows.keys()))
                 return self.respond(cached_quotes(symbols,rr,now()//5))
             self.respond({'error':'not found'},404)
     return Handler

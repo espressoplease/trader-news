@@ -6,6 +6,7 @@
   (let url (string "http://127.0.0.1:" (readenv "MARKET_DATA_PORT" 8766)
                    "/" endpoint "?symbol=" (urlencode (or arg!symbol "^GSPC"))
                    "&range=" (urlencode (or arg!range "1mo"))
+                   "&market=" (urlencode (or arg!market ""))
                    "&symbols=" (urlencode (or arg!symbols ""))
                    "&all=" (urlencode (or arg!all "")))
     (aif (errsafe (http-response url (obj timeout 3 maxtime 5)))
