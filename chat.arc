@@ -141,7 +141,7 @@
       (tag (div class "trader-chat-heading")
         (tag (h1) (pr "Trader News chat"))
         (tag (p class "trader-chat-note")
-          (pr "Logged-in users can join the conversation. Be civil, stay on topic, and flag abuse.")))
+          (pr "Logged-in users can join the conversation. Be civil, stay on topic, and flag abuse. New messages refresh every 60 seconds while this tab is visible.")))
       (tag (div id "trader-chat-messages" class "trader-chat-messages")
         (each msg (rev (chat-recent-messages))
           (chat-message-row msg)))
