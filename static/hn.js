@@ -164,7 +164,7 @@ document.addEventListener("click", onclick);
     var meta = document.createElement('div');
     meta.className = 'trader-chat-meta';
     var user = document.createElement('span');
-    user.textContent = msg.user;
+    user.textContent = msg.user + (msg.referralStars || '');
     meta.appendChild(user);
     meta.appendChild(document.createTextNode(' · live update'));
     var body = document.createElement('div');

@@ -65,6 +65,7 @@
   text       nil
   votes      nil   ; elts each (time ip by dir score effects)
   score      0
+  referral-bonus nil ; one-time bonus on a new post, independent of votes
   sockvotes  0
   flags      nil
   dead       nil
@@ -771,7 +772,8 @@
   (gentag link rel 'stylesheet type 'text/css href (static-src "news.css")))
 
 (mac npage (title . body)
-  `(tag (html op (op)) ; op lets hn.js know which listing it's on
+  `(do (referral-track-page)
+     (tag (html op (op)) ; op lets hn.js know which listing it's on
      (tag head
        (gentag meta name "referrer" content "origin")
        (gentag meta name "viewport" content "width=device-width, initial-scale=1.0")
@@ -785,7 +787,7 @@
        (center
          (tag (table id 'hnmain border 0 cellpadding 0 cellspacing 0 width "85%"
                      bgcolor sand)
-           ,@body)))))
+           ,@body))))))
 
 (or= pagefns* nil)
 
@@ -819,6 +821,7 @@
                  (admin-bar (- (msec) ,gt) ,whence)))))))
 
 (def footer ()
+  (referral-analytics)
   (spanclass yclinks
     (w/bars
       (link "Guidelines"  "newsguidelines.html")
@@ -936,6 +939,7 @@
                    (spanclass pagetop (topright whence)))
                  (tag (td style "line-height:12pt; height:10px;")
                    (spanclass pagetop (prbold label))))))))
+  (when (me) (trtd (referral-banner)))
   (each f pagefns* (f))
   (spacerow 10))
 
@@ -1157,6 +1161,7 @@
 (load "backlog.arc")
 (load "market-feed.arc")
 (load "chat.arc")
+(load "referrals.arc")
 
 
 ; News Admin
@@ -1408,6 +1413,7 @@
                      (fn ,args
                        (tostring (w/me nil ,@body))))
        (def ,name ,args
+         (unless (is (op) "rss") (referral-track-page))
          (if (me)
              (do ,@body)
              (pr (,gc ,@args)))))))
@@ -2136,7 +2142,8 @@
        (fontcolor orange (pr user))
       (and show-noob (me) (noob user))
        (fontcolor noob-color* (pr user))
-       (pr user)))
+       (pr user))
+  (pr (referral-stars user)))
 
 (= show-threadavg* t)
 
@@ -2564,6 +2571,7 @@
              "newest"))))
 
 (def submit-item (i)
+  (referral-apply-bonus i (me))
   (push i!id my!submitted)
   (save-prof)
   (vote-for i))

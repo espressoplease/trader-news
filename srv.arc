@@ -139,6 +139,9 @@
         (if (is c #\newline)
             (if (is (++ nls) 2) 
                 (let (type op args n cooks) (parseheader (rev lines))
+                  (= (the request-method) type
+                     (the visitor-agent) (request-header (rev lines) "user-agent")
+                     (the visitor-ip) (visitor-address ip (rev lines)))
                   (let t1 (msec)
                     (case type
                       get  (respond o op args cooks ip)
@@ -358,6 +361,20 @@ Connection: close"))
     (prn header*)
     (prn)
     (apply pr msg args)))
+
+ ; Only a local reverse proxy may supply the visitor address. Nginx overwrites
+; X-Real-IP with the socket peer; never use a caller-supplied forwarding chain.
+(def request-header (lines name)
+  (some (fn (line)
+          (let prefix (string name ":")
+            (and (begins (downcase line) prefix)
+                 (trim (cut line (len prefix))))))
+        (cdr lines)))
+
+(def visitor-address (peer lines)
+  (or (and (in peer "127.0.0.1" "::1")
+           (request-header lines "x-real-ip"))
+      peer))
 
 (def parseheader (lines)
   (let (type op args) (parseurl (car lines))

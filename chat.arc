@@ -102,7 +102,7 @@
   (unless msg!deleted
     (tag (div class "trader-chat-message")
       (tag (div class "trader-chat-meta")
-        (link msg!user (user-url msg!user))
+        (userlink msg!user nil nil)
         (pr " · " (chat-age msg!created))
         (when (and admin-view msg!flags)
           (spanclass trader-chat-flagged
@@ -122,7 +122,7 @@
 
 (def chat-json-message (msg)
   (obj id msg!id user msg!user text msg!text created msg!created
-       deleted msg!deleted flags (len msg!flags)))
+       deleted msg!deleted flags (len msg!flags) referralStars (referral-stars msg!user)))
 
 (def chat-json-page ()
   (let since-id (or (safe-posint arg!since) 0)

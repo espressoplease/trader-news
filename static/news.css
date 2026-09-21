@@ -437,3 +437,13 @@ and (max-width : 750px) {
     margin-left: 0;
   }
 }
+
+.referral-banner { padding:10px 14px; background:#fffaf4; border-bottom:1px solid #ead8c0; font:12px Verdana,sans-serif; }
+.referral-banner p { margin:5px 0; }
+.referral-url { display:block; color:#426549; overflow-wrap:anywhere; }
+.referral-rules { color:#82735f; font-size:10px; line-height:1.5; }
+.referral-progress { color:#555; }
+.community-analytics { max-width:720px; margin:15px auto; text-align:left; padding:0 10px; }
+.community-analytics h3 { font-size:12px; margin:0 0 5px; }
+.community-analytics img { width:100%; height:auto; display:block; }
+.community-analytics p { color:#82735f; font-size:10px; }
