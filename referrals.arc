@@ -122,7 +122,7 @@
             peak (max 1 (apply max values))
             total (apply + values))
       (tostring
-        (pr "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 720 160\" role=\"img\" aria-labelledby=\"title desc\"><title id=\"title\">Trader News daily page views</title><desc id=\"desc\">"
+        (pr "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 720 160\" role=\"img\" aria-labelledby=\"title desc\"><title id=\"title\">Trader News daily unique visits</title><desc id=\"desc\">"
             total " unique visits in the last 30 days. Peak daily visits: " peak
             ".</desc><rect width=\"720\" height=\"160\" fill=\"#f6f6ef\"/><g fill=\"#82735f\" font-family=\"Verdana,sans-serif\" font-size=\"11\"><text x=\"10\" y=\"16\">"
             total " unique visits over 30 days</text><text x=\"10\" y=\"151\">29 days ago</text><text x=\"675\" y=\"151\">Today</text></g>")
