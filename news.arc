@@ -1505,16 +1505,18 @@
 
 ; Returns (start end numstart items): start/end are the index window into
 ; items for the page, numstart is the rank to show for the first item.
-; ?p=N gives a page-numbered window; ?next=ID[&n=N] is an id cursor (used by
-; newest/from, whose lists run newest-id-first) that keeps items from ID on.
+; ?p=N gives a page-numbered window; ?next=ID[&n=N] is an item cursor (used
+; by newest/from) that keeps items from the matching item onward.
 
 (def paginate (items perpage)
   (aif (safe-posint arg!p)
-        (with (start (* (- it 1) perpage)
+       (with (start (* (- it 1) perpage)
                end   (* it perpage))
           (list start end (+ start 1) items))
        (safe-id arg!next)
-        (list 0 perpage (cur-n) (keep [<= _!id it] items))
+        (aif (pos [is _!id it] items)
+             (list it (+ it perpage) (cur-n) items)
+             (list 0 perpage (cur-n) items))
         (list 0 perpage (cur-n) items)))
 
 
@@ -1529,7 +1531,10 @@
             [nexturl "newest" _ (+ (cur-n) perpage*)]))
 
 (def newstories ((o n maxend*))
-  (retrieve n shown stories*))
+  ; Market-backlog stories use synthetic negative ids, so id order is not
+  ; publication order. Keep newest and the homepage preview on one timestamp
+  ; ordered source, while preserving the existing visibility rules.
+  (retrieve n shown (sort (compare > !time) stories*)))
 
 ;(def newstories ((o n maxend*) (o consider 2000))
 ;  (rank-stories n consider !time shown))
@@ -2056,7 +2061,7 @@
       (hide-item it)))
   (to-json (snip-pair onop next)))
 
-; /newest is ordered by id, so hn.js sends a next= item id: render the
+; /newest is ordered by timestamp, so hn.js sends a next= item id: render the
 ; first visible story at/after it and return the id after that for the
 ; morelink's cursor.  /news (and root /) is ranked and shows the top
 ; perpage*; hn.js sends no cursor there, so once the item is hidden the
@@ -2072,9 +2077,10 @@
   (if (is (only&car:tokens onop #\?) "newest")
        (w/the op "newest"
          (whenlet n (safe-id next)
-           (whenlet tail (keep [<= _!id n] (newstories maxend*))
-             (list (tostring (display-item 1 (car tail) onop t))
-                   (aand (cadr tail) it!id)))))
+           (let items (newstories maxend*)
+             (whenlet start (pos [is _!id n] items)
+               (list (tostring (display-item 1 (items start) onop t))
+                     (aand (items (+ start 1)) it!id))))))
       (in onop "news" "")
        (w/the op onop
          (whenlet s ((home-stories maxend*) (- perpage* 1))
