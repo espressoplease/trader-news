@@ -139,8 +139,8 @@
        deleted msg!deleted flags (len msg!flags) referralStars (referral-stars msg!user)))
 
 (def chat-json-page ()
-  (let since-id (or (safe-posint arg!since) 0)
-       before-id (safe-posint arg!before)
+  (with (since-id (or (safe-posint arg!since) 0)
+         before-id (safe-posint arg!before))
     (responding type-header*!json (prn)
       (prjson
         (obj ok t messages
