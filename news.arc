@@ -12,10 +12,10 @@
      site-url*     (or (readenv "SITE_URL" nil)
                        "http://localhost:@port") ; no trailing slash
      hn-url*       "https://news.ycombinator.com"
-     site-email*   "hn@@ycombinator.lol"
+     site-email*   "hello@@tradernews.fyi"
      parent-url*   "/"
      favicon-url*  ""
-     site-desc*    "Finance-focused Hacker News simulator" ; for rss feed
+     site-desc*    "Finance-focused news and market community" ; for rss feed
      site-color*   (color 170 170 230)
      border-color* (color 198 176 146)))
 
@@ -823,9 +823,6 @@
                (color-stripe (main-color))
                (br)
                ;(center
-               ;  (tag (a href "https://www.ycombinator.com/apply")
-               ;    (pr "Consider applying for YC's Fall 2026 batch! "
-               ;        "<u>Applications</u> are open till July 27.")))
                ;(br)
                (center
                  (or (hook 'longfoot) (footer))
@@ -835,8 +832,6 @@
   (when (me) (referral-banner))
   (spanclass yclinks
     (w/bars
-      (link "Guidelines"  "newsguidelines.html")
-      (link "FAQ"         "newsfaq.html")
       (link "Lists"       "lists")
       (link "Chat"        "chat")
       (tag (a href "https://github.com/espressoplease/trader-news"
@@ -844,10 +839,8 @@
         (pr "GitHub"))
       (link "Analytics" "analytics")
       (link "Terms"       "terms")
-      (link "API"         "https://github.com/HackerNews/API")
       (link "Security"    "security.html")
       (link "DMCA"        "dmca.html")
-      (link "Apply to YC" "https://www.ycombinator.com/apply/")
       (link "Contact"     "mailto:@site-email*")))
   (br2)
   (tag (form method "get" action "//hn.algolia.com/")
@@ -1062,15 +1055,12 @@
       (tag (img class "trader-logo" src logo-url* width 18 height 18
                 style "display:block;")))))
 
-(or= toplabels* '(nil "welcome" "new" "threads" "past" "comments" "lists" "chat" "terms" "*"))
+(or= toplabels* '(nil "new" "threads" "past" "comments" "lists" "chat" "terms" "*"))
 
 ; redefined later
 
-(= welcome-url* "newswelcome.html")
-
 (def toprow (label)
   (w/bars
-    (if (noob) (toplink "welcome" welcome-url* label))
     (toplink "new" "newest" label)
     (if (me) (toplink "threads" (threads-url) label))
     (toplink "past" "front" label)
@@ -3142,14 +3132,7 @@
       (row "" (comment-form parent whence text)))))
 
 (= noob-comment-msg*
-   "If you haven't already, would you mind reading about HN's
- @(tostring:underlink
-    "approach to comments"
-    "@{hn-url*}/newswelcome.html")
- and
- @(tostring:underlink
-    "site guidelines"
-    "@{hn-url*}/newsguidelines.html#comments")?")
+   "Please keep comments thoughtful, civil, and useful to other Trader News readers.")
 
 ; Comment forms last for 30 min (- cache time)
 
