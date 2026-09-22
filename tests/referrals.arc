@@ -68,8 +68,9 @@
 (reset-referrals)
 (referral-record 25000 "198.51.100.9" nil nil)
 (referral-record 25001 "198.51.100.9" nil nil)
-(referral-test hourly-pageview-once
-               (is (referral-days* (referral-day 25000)) 1))
+(referral-record 25300 "198.51.100.9" nil nil)
+(referral-test five-minute-return-visit
+               (is (referral-days* (referral-day 25000)) 2))
 
 ; Replay derives exactly the same state from the append-only ledger.
 (reset-referrals)

@@ -5,6 +5,7 @@
 
 (= referral-ledger* (string newsdir* "referral-events"))
 (diskvar referral-secret* (string newsdir* "referral-secret"))
+(= referral-visit-window* (* 5 60))
 (or= referral-lock* (make-lock 24 "referrals")
      referral-counts* (table)
      referral-last* (table)
@@ -35,12 +36,12 @@
 
 (def referral-apply (event)
   (let (at day fingerprint ref owner) event
-    ; Count analytics visits at most once per hour per keyed visitor. The old
+    ; Count analytics visits at most once every five minutes per keyed visitor. The old
     ; implementation counted every HTML request, so background refreshes
     ; could look like thousands of human views.
     (when (or (no fingerprint)
               (no (referral-view-last* fingerprint))
-              (>= (- at (referral-view-last* fingerprint 0)) 3600))
+              (>= (- at (referral-view-last* fingerprint 0)) referral-visit-window*))
       (when fingerprint (= (referral-view-last* fingerprint) at))
       (++ (referral-days* day 0)))
     (when fingerprint
@@ -146,4 +147,4 @@
     (tag (h3) (pr "Community activity"))
     (gentag img src "/community-analytics.svg" width "720" height "160"
             alt "Daily Trader News unique visits over the last 30 days")
-    (tag (p) (pr "Daily unique visits, with returning visitors counted once per hour. Updated every 5 minutes. Collection starts with this feature."))))
+    (tag (p) (pr "Daily unique visits, with returning visitors counted once every 5 minutes. Updated every 5 minutes. Collection starts with this feature."))))
