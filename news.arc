@@ -917,9 +917,9 @@
        site-color*))
 
 (def site-or-hn-url ()
-  (if (and (in (op) "" "news") (~req-args))
-      "@{hn-url*}/@(op)"
-      "news"))
+  ; Trader News navigation should stay on Trader News.  hn-url* remains the
+  ; upstream integration host for the scraper and account-claim flow.
+  "/")
 
 (def pagetop (switch lid label (o title) (o whence))
 ; (tr (tdcolor black (vspace 5)))
@@ -1649,9 +1649,7 @@
       (hook 'listspage))))
 
 (def topcolors-label ()
-  (pr "A sampler of ")
-  (underlink "topcolors" "@{hn-url*}/item?id=97573")
-  (pr " chosen by active users"))
+  (pr "A sampler of top colors chosen by active users"))
 
 
 ; Upvoted page
@@ -2889,10 +2887,9 @@
   (and (op "item") (is (string id) arg!id)))
 
 (def item-or-hn-url (id (o anchor))
-  (string (aand (viewing-item&item id)
-                (imported it)
-                "@{hn-url*}/")
-          (item-url id anchor)))
+  ; Imported discussions are available locally, so timestamps and comment
+  ; links should not unexpectedly send readers back to Hacker News.
+  (item-url id anchor))
 
 (defmemo item-url (id (o anchor))
   (string (if id "item?id=") id (if anchor "#") anchor))
