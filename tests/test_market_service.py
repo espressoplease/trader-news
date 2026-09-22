@@ -37,6 +37,23 @@ class MarketServiceTest(unittest.TestCase):
   with self.s.connect() as c: rows=c.execute("select ts,close from bars").fetchall()
   self.assertEqual([(r['ts'],r['close']) for r in rows],[(n-240,1),(n-120,2)])
   self.assertEqual(self.s.quote('X','1d')['price'],12)
+ def test_extended_hours_are_separate_from_regular_bars(self):
+  n=m.now()//120*120
+  p=payload([n-240,n-120,n+120],[9,10,12])
+  result=p['chart']['result'][0]
+  result['meta']['regularMarketPrice']=12
+  result['meta']['regularMarketTime']=n+120
+  result['meta']['currentTradingPeriod']={'pre':{'start':n-240,'end':n},'regular':{'start':n,'end':n+3600},'post':{'start':n+3600,'end':n+7200}}
+  self.s.upsert_chart('X','2m',p,fetched=n-60)
+  with self.s.connect() as c:
+   regular=c.execute("select ts,close from bars order by ts").fetchall()
+   extended=c.execute("select ts,close,session from extended_bars order by ts").fetchall()
+   latest=c.execute("select pre_market_price,pre_market_time,market_state from latest_quotes where symbol='X'").fetchone()
+  self.assertEqual([(r['ts'],r['close']) for r in regular],[(n+120,12)])
+  self.assertEqual([(r['ts'],r['close'],r['session']) for r in extended],[(n-240,9,'pre'),(n-120,10,'pre')])
+  self.assertEqual((latest['pre_market_price'],latest['pre_market_time'],latest['market_state']),(10,n-120,'PRE'))
+  quote=self.s.quote('X','1d')
+  self.assertEqual((quote['preMarketPrice'],quote['preMarketTime'],quote['marketState']),(10,n-120,'PRE'))
  def test_429_uses_retry_after_global_backoff(self):
   rows={'X':('X','company')}; self.s.add_instruments(rows); worker=m.Collector(self.s,rows,[])
   worker.handle_failure('X',m.ProviderError('slow down',429,91))

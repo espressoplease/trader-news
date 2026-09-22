@@ -2,6 +2,8 @@
 ; The append-only ledger survives restarts. It contains keyed IP hashes only
 ; for referral deduplication and self-referral checks, never raw addresses.
 (attribute img alt opstring)
+(attribute button data-referral-url opstring)
+(attribute span aria-live opstring)
 
 (= referral-ledger* (string newsdir* "referral-events"))
 (diskvar referral-secret* (string newsdir* "referral-secret"))
@@ -101,7 +103,20 @@
           (tag (strong) (pr "Share Trader News"))
           (tag (p)
             (pr "Build the community by sharing Trader News. In return, earn extra starting points to help the stories and polls you post in future. Send your personal link to people who would enjoy the site. When someone opens Trader News through your link, their visit can count toward your sharing milestones."))
-          (tag (a class "referral-url" href url) (presc url))
+          (tag (div class "referral-link-card")
+            (tag (div class "referral-link-heading")
+              (tag (strong) (pr "Your Trader News referral link"))
+              (tag (span class "referral-link-hint") (pr "Share it anywhere")))
+            (tag (div class "referral-link-row")
+              (tag (a class "referral-url" href url) (presc url))
+              (tag (div class "referral-actions")
+                (tag (button class "referral-action referral-copy" type "button"
+                             data-referral-url url)
+                  (pr "copy"))
+                (tag (button class "referral-action referral-share" type "button"
+                             data-referral-url url)
+                  (pr "share"))))
+            (tag (span class "referral-action-status" aria-live "polite") (pr "")))
           (tag (p)
             (pr "At 1,000 credited visits, every new story or poll you post gets 1 extra starting point automatically, and a * appears beside your username. That means a post that normally starts with 1 point starts with 2. The star recognises your contribution to growing the community. You keep this benefit for future stories and polls; existing posts and comments do not receive the bonus."))
           (tag (p)

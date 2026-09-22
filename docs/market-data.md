@@ -33,7 +33,13 @@ replace overlapping observations instead of appending duplicate histories.
 Two-minute bars are kept for 11 days, 30-minute bars for 23 days, and daily
 bars for five years plus a small boundary overlap. Daily history is bootstrapped
 once, updated with overlapping recent bars, and reloaded monthly or after a
-new split. Shared quote responses are cached for five seconds. Older Arc JSON cache files are preserved for rollback.
+new split. Intraday Yahoo requests use `includePrePost=true`. Extended-hours
+bars are stored in a separate `extended_bars` table, and the latest premarket
+and postmarket observations are exposed as separate quote fields. Regular
+charts and day returns never mix those observations into the regular session.
+The UI labels an extended quote explicitly as `pre` or `post` and includes its
+provider timestamp. Shared quote responses are cached for five seconds. Older
+Arc JSON cache files are preserved for rollback.
 
 ## Deployment
 

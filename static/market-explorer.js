@@ -23,6 +23,17 @@
   function finite(value) { return typeof value === 'number' && Number.isFinite(value); }
   function number(value) { return finite(value) ? Number(value).toLocaleString(undefined, {maximumFractionDigits:2}) : 'n/a'; }
   function percent(value) { return finite(value) ? (value >= 0 ? '+' : '') + Number(value).toFixed(2) + '%' : 'n/a'; }
+  function extendedQuote(record) {
+    if (!record) return null;
+    var session = String(record.marketState || '').toUpperCase();
+    if (session === 'PRE' && finite(record.preMarketPrice)) return {label:'pre', price:record.preMarketPrice, change:record.preMarketChangePct, time:record.preMarketTime};
+    if (session === 'POST' && finite(record.postMarketPrice)) return {label:'post', price:record.postMarketPrice, change:record.postMarketChangePct, time:record.postMarketTime};
+    return null;
+  }
+  function extendedText(record) {
+    var quote = extendedQuote(record);
+    return quote ? quote.label + ' ' + number(quote.price) + ' ' + percent(quote.change) : '';
+  }
   function marketCap(record) {
     var value = record.marketCap;
     if (!finite(value) || !record.marketCapCurrency) return 'n/a';
@@ -71,8 +82,8 @@
   function age(seconds) { if (!finite(seconds)) return 'unknown'; seconds = Math.max(0, Math.round(seconds)); if (seconds < 60) return seconds + 's ago'; if (seconds < 3600) return Math.round(seconds / 60) + 'm ago'; if (seconds < 86400) return Math.round(seconds / 3600) + 'h ago'; return Math.round(seconds / 86400) + 'd ago'; }
   function timestamp(seconds) { return finite(seconds) ? new Date(seconds * 1000).toLocaleString() : 'unknown'; }
   function statusLabel(record) { if (!record) return 'warming'; if (record.status === 'warming') return 'warming'; if (record.status === 'unavailable') return 'unavailable'; if (record.status === 'error') return 'unavailable'; if (record.marketState === 'CLOSED') return 'closed'; return record.status || 'cached'; }
-  function badgeText(record) { if (!record || !finite(record.asOf)) return record && record.error ? 'unavailable' : 'warming'; var priceAge = finite(record.asOf) ? age(Date.now() / 1000 - record.asOf) : 'unknown'; return record.marketState === 'CLOSED' ? 'closed · ' + priceAge : priceAge; }
-  function badgeTitle(record) { if (!record) return 'Awaiting a server cache response.'; return 'Source: ' + (record.source || 'server cache') + '\nQuote timestamp: ' + timestamp(record.asOf) + '\nLast fetched: ' + timestamp(record.fetchedAt) + '\nMarket state: ' + (record.marketState || 'unknown') + '\nCurrency: ' + (record.currency || 'unknown') + (record.error ? '\nRefresh issue: ' + record.error : '') + (record.coverage && !record.coverage.complete ? '\nFull selected-range history is not yet available.' : ''); }
+  function badgeText(record) { if (!record || !finite(record.asOf)) return record && record.error ? 'unavailable' : 'warming'; var extended = extendedQuote(record); if (extended) return extended.label + ' · ' + age(Date.now() / 1000 - extended.time); var priceAge = finite(record.asOf) ? age(Date.now() / 1000 - record.asOf) : 'unknown'; return record.marketState === 'CLOSED' ? 'closed · ' + priceAge : priceAge; }
+  function badgeTitle(record) { if (!record) return 'Awaiting a server cache response.'; var extended = extendedText(record); return 'Source: ' + (record.source || 'server cache') + '\nQuote timestamp: ' + timestamp(record.asOf) + '\nLast fetched: ' + timestamp(record.fetchedAt) + '\nMarket state: ' + (record.marketState || 'unknown') + '\nCurrency: ' + (record.currency || 'unknown') + (extended ? '\nExtended-hours quote: ' + extended + ' at ' + timestamp((extendedQuote(record) || {}).time) : '') + (record.error ? '\nRefresh issue: ' + record.error : '') + (record.coverage && !record.coverage.complete ? '\nFull selected-range history is not yet available.' : ''); }
   function sourceLine(record) { if (!record) return 'Server cache warming.'; var fetchedAge = finite(record.fetchedAt) ? age(Date.now() / 1000 - record.fetchedAt) : 'unknown'; var priceAge = finite(record.asOf) ? age(Date.now() / 1000 - record.asOf) : 'unknown'; return (record.source || 'server cache') + ' · fetched ' + fetchedAge + ' · price ' + priceAge + ' · ' + statusLabel(record); }
   function feedUrl(symbol, range) { return '/market-feed?symbol=' + encodeURIComponent(symbol) + '&range=' + encodeURIComponent(range); }
   function getFeed(symbol, range, fresh) {
@@ -103,10 +114,11 @@
   }
   function setRail(market, record) {
     var card = el('market-' + market.key); if (!card) return;
-    var last = card.querySelector('.market-index-last'), move = card.querySelector('.market-index-change'), badge = card.querySelector('.market-index-badge');
+    var last = card.querySelector('.market-index-last'), move = card.querySelector('.market-index-change'), extended = card.querySelector('.market-index-extended'), badge = card.querySelector('.market-index-badge');
     var s = stats(record && record.points), value = finite(record && record.price) ? record.price : s.last, dayMove = record && record.dayChangePct;
     if (last) last.textContent = number(value);
     if (move) { move.textContent = percent(dayMove); changeClass(move, dayMove); }
+    if (extended) { extended.textContent = extendedText(record); extended.title = extendedText(record) ? badgeTitle(record) : ''; }
     if (!badge) { badge = document.createElement('span'); badge.className = 'market-index-badge'; card.querySelector('.market-index-reading').appendChild(badge); }
     badge.textContent = badgeText(record); badge.title = badgeTitle(record);
   }
@@ -171,7 +183,7 @@
       var node = document.createElement('div'), ident = document.createElement('span'), price = document.createElement('span'), day = document.createElement('span'), period = document.createElement('span'), cap = document.createElement('span'), pe = document.createElement('span'), yieldValue = document.createElement('span'), badge = document.createElement('span');
       var info = window.FINANCE_COMPANY_INFO ? window.FINANCE_COMPANY_INFO(row.ticker, row.name, market.name) : null;
       node.className = 'market-constituent'; node.tabIndex = 0; node.setAttribute('role', 'button'); node.title = info ? info.description + '\nClick for chart, detail, and research links.' : badgeTitle(row.quote); ident.className = 'market-constituent-ident'; price.className = 'market-constituent-price'; day.className = 'market-constituent-day market-constituent-move'; period.className = 'market-constituent-period market-constituent-move'; cap.className = 'market-constituent-cap'; pe.className = 'market-constituent-pe'; yieldValue.className = 'market-constituent-yield'; badge.className = 'market-row-badge';
-      ident.textContent = row.ticker + ' ' + row.name; price.textContent = number(row.quote.price) + (finite(row.quote.price) && row.quote.currency ? ' ' + row.quote.currency : ''); day.textContent = percent(row.quote.dayChangePct); period.textContent = percent(row.quote.periodChangePct); cap.textContent = marketCap(row.quote); pe.textContent = peRatio(row.quote); yieldValue.textContent = dividendYield(row.quote); [cap,pe,yieldValue].forEach(function(field) { field.title = fundamentalsTitle(row.quote); }); badge.textContent = badgeText(row.quote); badge.title = badgeTitle(row.quote); changeClass(day, row.quote.dayChangePct); changeClass(period, row.quote.periodChangePct); tone(node, row.move);
+      ident.textContent = row.ticker + ' ' + row.name; price.textContent = number(row.quote.price) + (finite(row.quote.price) && row.quote.currency ? ' ' + row.quote.currency : ''); var extended = extendedQuote(row.quote); if (extended) { var extendedNode = document.createElement('span'); extendedNode.className = 'market-constituent-pre'; extendedNode.textContent = extendedText(row.quote); extendedNode.title = badgeTitle(row.quote); price.appendChild(extendedNode); } day.textContent = percent(row.quote.dayChangePct); period.textContent = percent(row.quote.periodChangePct); cap.textContent = marketCap(row.quote); pe.textContent = peRatio(row.quote); yieldValue.textContent = dividendYield(row.quote); [cap,pe,yieldValue].forEach(function(field) { field.title = fundamentalsTitle(row.quote); }); badge.textContent = badgeText(row.quote); badge.title = badgeTitle(row.quote); changeClass(day, row.quote.dayChangePct); changeClass(period, row.quote.periodChangePct); tone(node, row.move);
       [ident, price, day, period, cap, pe, yieldValue, badge].forEach(function (child) { node.appendChild(child); });
       function select() { loadCompany(row); } node.addEventListener('click', select); node.addEventListener('keydown', function (event) { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); } }); target.appendChild(node);
     });
@@ -179,7 +191,7 @@
   }
   function renderDetail(entity, record) {
     var points = clean(record && record.points), s = stats(points), value = finite(record && record.price) ? record.price : s.last, move = record && (state.range === '1d' ? record.dayChangePct : record.periodChangePct);
-    text('market-detail-name', entity.name); text('market-detail-symbol', entity.symbol); text('market-detail-last', number(value) + (entity.type === 'company' && record && record.currency ? ' ' + record.currency : '')); var change = el('market-detail-change'); if (change) { change.textContent = percent(move); changeClass(change, move); }
+    text('market-detail-name', entity.name); text('market-detail-symbol', entity.symbol); text('market-detail-last', number(value) + (entity.type === 'company' && record && record.currency ? ' ' + record.currency : '')); var change = el('market-detail-change'); if (change) { change.textContent = percent(move); changeClass(change, move); } var extended = el('market-detail-extended'); if (extended) { extended.textContent = extendedText(record); extended.title = extendedText(record) ? badgeTitle(record) : ''; }
     if (entity.type === 'company') renderFundamentals(record || {});
     draw(points, entity.name); text('market-chart-caption', ranges[state.range] + ' price history · ' + (points.length ? new Date(points[0].ts).toLocaleDateString() + ' to ' + new Date(points[points.length-1].ts).toLocaleDateString() + ' · ' : '') + sourceLine(record)); text('market-source', sourceLine(record));
   }

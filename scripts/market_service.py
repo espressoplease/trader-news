@@ -95,6 +95,12 @@ def quote_response(symbol, range_, quote_row, base_row, expected_start):
     if base is not None and not coverage['complete']: status='partial'
     return {'symbol':symbol, 'range':range_, 'price':price, 'basePrice':base,
             'dayChangePct':quote_return(price,previous), 'periodChangePct':quote_return(price,previous) if range_=='1d' else quote_return(price,base) if coverage['complete'] else None,
+            'preMarketPrice':quote_row['pre_market_price'] if quote_row and quote_row['pre_market_price'] is not None else None,
+            'preMarketTime':quote_row['pre_market_time'] if quote_row else None,
+            'preMarketChangePct':quote_return(quote_row['pre_market_price'],previous) if quote_row and quote_row['pre_market_price'] is not None else None,
+            'postMarketPrice':quote_row['post_market_price'] if quote_row and quote_row['post_market_price'] is not None else None,
+            'postMarketTime':quote_row['post_market_time'] if quote_row else None,
+            'postMarketChangePct':quote_return(quote_row['post_market_price'],previous) if quote_row and quote_row['post_market_price'] is not None else None,
             'status':status, 'coverage':coverage,
             'asOf':quote_row['market_time'] if quote_row else None,
             'fetchedAt':quote_row['fetched_at'] if quote_row else None,
@@ -148,9 +154,11 @@ class Store:
         with self.connect() as c:
             c.executescript("""PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;
             CREATE TABLE IF NOT EXISTS instruments(symbol TEXT PRIMARY KEY, provider_symbol TEXT NOT NULL, kind TEXT, exchange_tz TEXT, enabled INTEGER DEFAULT 1, cooldown_until INTEGER DEFAULT 0, requested_at INTEGER DEFAULT 0, requested_range TEXT);
-            CREATE TABLE IF NOT EXISTS latest_quotes(symbol TEXT PRIMARY KEY, price REAL, previous_close REAL, market_time INTEGER, fetched_at INTEGER, attempted_at INTEGER, currency TEXT, market_state TEXT, exchange TEXT, exchange_tz TEXT, regular_open INTEGER, regular_close INTEGER, source TEXT, error TEXT);
+            CREATE TABLE IF NOT EXISTS latest_quotes(symbol TEXT PRIMARY KEY, price REAL, previous_close REAL, market_time INTEGER, fetched_at INTEGER, attempted_at INTEGER, currency TEXT, market_state TEXT, exchange TEXT, exchange_tz TEXT, regular_open INTEGER, regular_close INTEGER, source TEXT, error TEXT, pre_market_price REAL, pre_market_time INTEGER, post_market_price REAL, post_market_time INTEGER);
             CREATE TABLE IF NOT EXISTS bars(symbol TEXT NOT NULL, interval TEXT NOT NULL, ts INTEGER NOT NULL, open REAL, high REAL, low REAL, close REAL, adj_close REAL, volume REAL, fetched_at INTEGER, source TEXT, PRIMARY KEY(symbol,interval,ts));
             CREATE INDEX IF NOT EXISTS bars_range ON bars(symbol,interval,ts);
+            CREATE TABLE IF NOT EXISTS extended_bars(symbol TEXT NOT NULL, interval TEXT NOT NULL, ts INTEGER NOT NULL, open REAL, high REAL, low REAL, close REAL, volume REAL, session TEXT NOT NULL, fetched_at INTEGER, source TEXT, PRIMARY KEY(symbol,interval,ts));
+            CREATE INDEX IF NOT EXISTS extended_bars_range ON extended_bars(symbol,interval,ts,session);
             CREATE TABLE IF NOT EXISTS history_state(symbol TEXT PRIMARY KEY,full_at INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS market_jobs(symbol TEXT,interval TEXT,period TEXT,requested_at INTEGER,PRIMARY KEY(symbol,interval));
             CREATE TABLE IF NOT EXISTS fundamentals(symbol TEXT PRIMARY KEY,payload TEXT,fetched_at INTEGER,attempted_at INTEGER,next_due INTEGER DEFAULT 0,error TEXT,requested_at INTEGER DEFAULT 0);
@@ -158,6 +166,9 @@ class Store:
             CREATE TABLE IF NOT EXISTS corporate_actions(symbol TEXT,kind TEXT,ts INTEGER,payload TEXT,PRIMARY KEY(symbol,kind,ts));""")
             try: c.execute("ALTER TABLE instruments ADD COLUMN requested_range TEXT")
             except sqlite3.OperationalError: pass
+            for column, definition in (('pre_market_price','REAL'),('pre_market_time','INTEGER'),('post_market_price','REAL'),('post_market_time','INTEGER')):
+                try: c.execute('ALTER TABLE latest_quotes ADD COLUMN '+column+' '+definition)
+                except sqlite3.OperationalError: pass
     @contextmanager
     def connect(self):
         c=sqlite3.connect(self.path, timeout=10); c.row_factory=sqlite3.Row
@@ -185,9 +196,16 @@ class Store:
             raise ProviderError(error.get('description','No chart result'),404 if error.get('code')=='Not Found' else 502)
         r=result[0]; meta=r.get('meta') or {}; indicators=r.get('indicators') or {}
         q=(indicators.get('quote') or [{}])[0] or {}; adj=(indicators.get('adjclose') or [{}])[0] or {}
-        timestamps=r.get('timestamp') or []; bars=[]
+        timestamps=r.get('timestamp') or []; bars=[]; extended=[]
         width={'2m':120,'30m':1800}.get(interval)
         alignment=int(timestamps[0])%width if timestamps and width else None
+        periods=meta.get('currentTradingPeriod') or {}
+        def session_at(stamp):
+            for name in ('pre','regular','post'):
+                period=periods.get(name) or {}
+                start=period.get('start'); end=period.get('end')
+                if isinstance(start,(int,float)) and isinstance(end,(int,float)) and start<=stamp<end: return name
+            return None
         for i,ts in enumerate(timestamps):
             # Yahoo appends a moving off-grid quote stub. Keep it as a quote,
             # not an additional candle on every refresh.
@@ -199,7 +217,11 @@ class Store:
             close=item('close')
             if close is None: continue
             av=adj.get('adjclose') or []; adjusted=av[i] if i<len(av) else None
-            bars.append((symbol,interval,int(ts),item('open'),item('high'),item('low'),close,adjusted,item('volume'),fetched,'yahoo'))
+            stamp=int(ts); session=session_at(stamp)
+            if session in ('pre','post'):
+                extended.append((symbol,interval,stamp,item('open'),item('high'),item('low'),close,item('volume'),session,fetched,'yahoo'))
+            else:
+                bars.append((symbol,interval,stamp,item('open'),item('high'),item('low'),close,adjusted,item('volume'),fetched,'yahoo'))
         price=meta.get('regularMarketPrice'); asof=meta.get('regularMarketTime')
         if not isinstance(price,(int,float)) or not math.isfinite(price):
             if not bars: raise ValueError('Response has no usable quote or bars')
@@ -211,7 +233,15 @@ class Store:
         quote_day=datetime.datetime.fromtimestamp(asof,tz).date()
         regular=(meta.get('currentTradingPeriod') or {}).get('regular') or {}
         opening=regular.get('start'); closing=regular.get('end')
-        state='REGULAR' if opening and closing and opening<=fetched<closing else 'CLOSED' if closing else meta.get('marketState')
+        state=next((name.upper() for name in ('pre','regular','post')
+                    if (periods.get(name) or {}).get('start') is not None
+                    and (periods.get(name) or {}).get('end') is not None
+                    and (periods.get(name) or {}).get('start')<=fetched<(periods.get(name) or {}).get('end')),
+                    meta.get('marketState') or ('CLOSED' if closing else None))
+        pre=next((row for row in reversed(extended) if row[8]=='pre'),None)
+        post=next((row for row in reversed(extended) if row[8]=='post'),None)
+        pre_price, pre_time=(pre[6],pre[2]) if pre else (None,None)
+        post_price, post_time=(post[6],post[2]) if post else (None,None)
         splits=(r.get('events') or {}).get('splits') or {}
         with self.lock, self.connect() as c:
             # A new split invalidates older raw-price history. Keep last-good
@@ -229,6 +259,11 @@ class Store:
             if full_history:
                 c.execute("DELETE FROM bars WHERE symbol=? AND interval='1d'",(symbol,))
             c.executemany("INSERT INTO bars(symbol,interval,ts,open,high,low,close,adj_close,volume,fetched_at,source) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(symbol,interval,ts) DO UPDATE SET open=excluded.open,high=excluded.high,low=excluded.low,close=excluded.close,adj_close=excluded.adj_close,volume=excluded.volume,fetched_at=excluded.fetched_at,source=excluded.source",bars)
+            c.executemany("INSERT INTO extended_bars(symbol,interval,ts,open,high,low,close,volume,session,fetched_at,source) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(symbol,interval,ts) DO UPDATE SET open=excluded.open,high=excluded.high,low=excluded.low,close=excluded.close,volume=excluded.volume,session=excluded.session,fetched_at=excluded.fetched_at,source=excluded.source",extended)
+            old_quote=c.execute('SELECT pre_market_price,pre_market_time,post_market_price,post_market_time FROM latest_quotes WHERE symbol=?',(symbol,)).fetchone()
+            if interval not in ('2m','30m'):
+                pre_price, pre_time=(old_quote['pre_market_price'],old_quote['pre_market_time']) if old_quote else (None,None)
+                post_price, post_time=(old_quote['post_market_price'],old_quote['post_market_time']) if old_quote else (None,None)
             previous=meta.get('previousClose')
             if interval=='1d' or previous is None:
                 candidates=c.execute("SELECT ts,close FROM bars WHERE symbol=? AND interval='1d' ORDER BY ts DESC LIMIT 10",(symbol,)).fetchall()
@@ -236,7 +271,7 @@ class Store:
             if previous is None:
                 old=c.execute('SELECT previous_close,market_time FROM latest_quotes WHERE symbol=?',(symbol,)).fetchone()
                 if old and old['market_time'] and datetime.datetime.fromtimestamp(old['market_time'],tz).date()==quote_day: previous=old['previous_close']
-            c.execute("INSERT INTO latest_quotes(symbol,price,previous_close,market_time,fetched_at,attempted_at,currency,market_state,exchange,exchange_tz,regular_open,regular_close,source,error) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,NULL) ON CONFLICT(symbol) DO UPDATE SET price=excluded.price,previous_close=excluded.previous_close,market_time=excluded.market_time,fetched_at=excluded.fetched_at,attempted_at=excluded.attempted_at,currency=excluded.currency,market_state=excluded.market_state,exchange=excluded.exchange,exchange_tz=excluded.exchange_tz,regular_open=excluded.regular_open,regular_close=excluded.regular_close,source=excluded.source,error=NULL",(symbol,price,previous,asof,fetched,fetched,meta.get('currency'),state,meta.get('exchangeName'),tzname,opening,closing,'yahoo'))
+            c.execute("INSERT INTO latest_quotes(symbol,price,previous_close,market_time,fetched_at,attempted_at,currency,market_state,exchange,exchange_tz,regular_open,regular_close,source,error,pre_market_price,pre_market_time,post_market_price,post_market_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?) ON CONFLICT(symbol) DO UPDATE SET price=excluded.price,previous_close=excluded.previous_close,market_time=excluded.market_time,fetched_at=excluded.fetched_at,attempted_at=excluded.attempted_at,currency=excluded.currency,market_state=excluded.market_state,exchange=excluded.exchange,exchange_tz=excluded.exchange_tz,regular_open=excluded.regular_open,regular_close=excluded.regular_close,source=excluded.source,error=NULL,pre_market_price=excluded.pre_market_price,pre_market_time=excluded.pre_market_time,post_market_price=excluded.post_market_price,post_market_time=excluded.post_market_time",(symbol,price,previous,asof,fetched,fetched,meta.get('currency'),state,meta.get('exchangeName'),tzname,opening,closing,'yahoo',pre_price,pre_time,post_price,post_time))
             if full_history:
                 c.execute('INSERT OR REPLACE INTO history_state VALUES(?,?)',(symbol,fetched))
             c.execute('UPDATE instruments SET cooldown_until=0 WHERE symbol=?',(symbol,))
@@ -245,6 +280,7 @@ class Store:
         with self.lock, self.connect() as c:
             for interval,seconds in KEEP.items():
                 c.execute('DELETE FROM bars WHERE interval=? AND ts<?',(interval,now()-seconds))
+                c.execute('DELETE FROM extended_bars WHERE interval=? AND ts<?',(interval,now()-seconds))
 
     def fail(self,symbol,error):
         with self.lock, self.connect() as c:
@@ -343,7 +379,8 @@ class Collector(threading.Thread):
         self.last_symbol=None; self.last_error=None; self.last_prune=0; self.fundamental_turn=0
 
     def fetch(self, provider, interval, period):
-        url='https://query1.finance.yahoo.com/v8/finance/chart/'+quote(provider,safe='^.-')+'?interval='+interval+'&range='+period+'&includePrePost=false&events=div%2Csplits'
+        extended='true' if interval in ('2m','30m') else 'false'
+        url='https://query1.finance.yahoo.com/v8/finance/chart/'+quote(provider,safe='^.-')+'?interval='+interval+'&range='+period+'&includePrePost='+extended+'&events=div%2Csplits'
         log.info('scheduled symbol=%s interval=%s range=%s',provider,interval,period)
         return parse_chart_json(self.request(url))
 
@@ -378,9 +415,11 @@ class Collector(threading.Thread):
             elif wanted and self.tick%4==0:
                 symbol=wanted['symbol']; interval=wanted['interval']; period=wanted['period']; demand=True
             else:
-                queue=self.indexes if self.tick%10==0 or not self.companies else self.companies
+                index_queue=self.tick%10==0 or not self.companies
+                queue=self.indexes if index_queue else self.companies
                 if not queue: return None
                 symbol=queue.popleft(); queue.append(symbol); interval,period='1d','5d'; demand=False
+                if index_queue: interval,period='2m','1d'
             instrument=c.execute('SELECT * FROM instruments WHERE symbol=?',(symbol,)).fetchone()
             if instrument['cooldown_until']>now(): return None
             history=c.execute('SELECT full_at FROM history_state WHERE symbol=?',(symbol,)).fetchone()

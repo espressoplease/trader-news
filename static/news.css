@@ -63,6 +63,10 @@ a:visited { color:#828282; text-decoration:none; }
 .market-index-reading { align-items:baseline; display:flex; gap:7px; margin-top:2px; }
 .market-index-last { color:#555; font-family:monospace; font-size:10px; }
 .market-index-change, .market-change { color:var(--market-accent); font-family:monospace; font-size:9px; }
+.market-index-extended, .market-detail-extended, .market-constituent-pre { color:#8b7b6c; font-family:monospace; font-size:7px; }
+.market-index-extended { margin-left:auto; }
+.market-detail-extended { margin-left:5px; }
+.market-constituent-pre { display:block; margin-top:1px; text-align:right; }
 .market-index-change.is-negative, .market-change.is-negative { color:#b14b3f; }
 .market-detail { background:#fffdf9; border:1px solid #ead8c0; box-sizing:border-box; margin:0 0 4px; max-width:100%; min-width:0; padding:7px; }
 .market-detail-head { align-items:baseline; display:flex; justify-content:space-between; }
@@ -445,11 +449,19 @@ and (max-width : 750px) {
   }
 }
 
-.referral-banner { box-sizing:border-box; max-width:720px; margin:15px auto 20px; padding:14px 16px; background:#f0eefb; border:1px solid #aaaae6; border-radius:0; color:#393357; text-align:left; font:12px Verdana,sans-serif; }
+.referral-banner { box-sizing:border-box; max-width:720px; margin:15px auto 20px; padding:14px 16px; background:var(--market-tint,#eef8ef); border:1px solid var(--market-border,#c9dfcc); border-radius:0; color:#3f5142; text-align:left; font:12px Verdana,sans-serif; }
 .referral-banner p { margin:8px 0; line-height:1.5; }
-.referral-url { display:block; color:#51458a; overflow-wrap:anywhere; }
-.referral-rules { color:#655b7b; font-size:10px; line-height:1.5; }
-.referral-banner .referral-progress { margin:12px 0 0; color:#514865; }
+.referral-link-card { box-sizing:border-box; margin:12px 0; padding:10px; background:rgba(255,255,255,.58); border:1px solid var(--market-border,#c9dfcc); }
+.referral-link-heading { align-items:baseline; display:flex; flex-wrap:wrap; gap:7px; margin-bottom:6px; color:#334238; }
+.referral-link-hint { color:#7d8d80; font-size:10px; }
+.referral-link-row { align-items:center; display:flex; gap:8px; min-width:0; }
+.referral-url { color:var(--market-accent,#39824a); display:block; flex:1 1 auto; min-width:0; overflow-wrap:anywhere; }
+.referral-actions { display:flex; flex:0 0 auto; gap:4px; }
+.referral-action { background:#fffaf4; border:1px solid var(--market-border,#c9dfcc); color:#5f6e63; cursor:pointer; font:10px Verdana,sans-serif; padding:4px 8px; text-transform:lowercase; }
+.referral-action:hover, .referral-action:focus { background:#fff; border-color:var(--market-accent,#39824a); color:#222; }
+.referral-action-status { color:var(--market-accent,#39824a); display:block; font-size:10px; min-height:12px; padding-top:5px; }
+.referral-rules { color:#647267; font-size:10px; line-height:1.5; }
+.referral-banner .referral-progress { margin:12px 0 0; color:#53665a; }
 .analytics-page { box-sizing:border-box; max-width:900px; margin:0 auto; padding:18px 16px 30px; text-align:left; }
 .analytics-page h1 { color:#222; font-size:18px; margin:0 0 4px; }
 .analytics-page-intro, .analytics-section-note { color:#82735f; font-size:10px; line-height:1.45; margin:0 0 14px; }

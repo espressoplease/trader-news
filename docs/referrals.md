@@ -1,7 +1,7 @@
 # Community referrals and analytics
 
-Logged-in readers see a purple share banner below the footer activity chart with `/?ref=USERNAME`, their credited
-visits, earned bonus and next milestone. Valid account usernames are resolved
+Logged-in readers see a share banner below the footer activity chart with a highlighted `/?ref=USERNAME` link, copy and share controls, their credited
+visits, earned bonus and next milestone. The share control uses the device's native share sheet where available and falls back to copying the link. Valid account usernames are resolved
 on the server. One IP can credit one referral in a rolling 3,600-second window,
 even across different referral links. Returning visitors may credit again after
 that hour. Signed-in self-visits and IPs previously seen signed in as the

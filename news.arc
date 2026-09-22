@@ -793,6 +793,7 @@
        (tag (script src (static-src "hn.js")))
        (tag (script src (static-src "market-explorer.js")))
        (tag (script src (static-src "cohort-analytics.js")))
+       (tag (script src (static-src "referral.js")))
        (tag title (presc ,title)))
      (tag body 
        (center
@@ -983,7 +984,8 @@
           (tag (span id "market-detail-symbol" class "market-symbol") (pr "^GSPC")))
         (tag (div class "market-detail-value")
           (tag (span id "market-detail-last") (pr "--"))
-          (tag (span id "market-detail-change" class "market-change") (pr "--"))))
+          (tag (span id "market-detail-change" class "market-change") (pr "--"))
+          (tag (span id "market-detail-extended" class "market-detail-extended") (pr ""))))
       (tag (div class "market-detail-grid")
         (tag (div class "market-chart-card")
           (tag (div class "market-range-bar")
@@ -1040,7 +1042,8 @@
     (tag (span class "market-index-name") (pr name))
     (tag (span class "market-index-reading")
       (tag (span class "market-index-last") (pr "--"))
-      (tag (span class "market-index-change") (pr "--")))))
+      (tag (span class "market-index-change") (pr "--"))
+      (tag (span class "market-index-extended") (pr "")))))
 
 (def market-column-sort-button (id label)
   (tag (button id id class "market-column-sort" type "button"

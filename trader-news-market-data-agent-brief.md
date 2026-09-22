@@ -113,7 +113,7 @@ Do not assume a static ticker string is a stable security identifier. Design an 
 The only implemented market provider is the Yahoo public chart endpoint:
 
 ~~~text
-https://query1.finance.yahoo.com/v8/finance/chart/<SYMBOL>?range=<RANGE>&interval=<INTERVAL>
+https://query1.finance.yahoo.com/v8/finance/chart/<SYMBOL>?range=<RANGE>&interval=<INTERVAL>&includePrePost=<true|false>
 ~~~
 
 The server sends a descriptive User-Agent and accepts JSON. Current HTTP timeout settings are approximately 15 seconds for request timeout and 20 seconds for the overall operation.
@@ -124,18 +124,12 @@ Yahoo data can be delayed, and the delay can vary by exchange and instrument. Th
 
 ## Current server-side polling behavior
 
-market-feed.arc starts an in-process background job:
-
-~~~arc
-(defbg market-feed 15
-  (market-feed-poll!))
-~~~
-
-The background tick runs every 15 seconds, but the actual provider request gate permits only one upstream request every 30 seconds:
-
-~~~arc
-market-feed-min-request-secs* 30
-~~~
+The production collector is the supervised Python process in
+`scripts/market_service.py`, started by `trader-news-market.service`. The Arc
+application proxies its loopback JSON responses and does not call Yahoo. The
+collector makes one upstream request at a time and currently spaces requests
+by at least two seconds, with exponential backoff and a longer delay after a
+429 response.
 
 The queue is a single shared queue. Each job is a pair of provider symbol and requested range. Jobs are deduplicated if already queued or if the corresponding cache entry is fresh. The current queue uses push and pop, so it behaves like a LIFO queue. Investigate whether that creates starvation or unfairness as on-demand company requests are added.
 
@@ -144,12 +138,16 @@ The initial background prime currently queues:
 - ^GSPC at 1mo;
 - all 13 supported index symbols at 1d.
 
-It does **not** automatically queue every constituent company.
+It does **not** automatically make every constituent intraday. After daily
+history is bootstrapped, the rotating index jobs use a 2-minute interval with
+`includePrePost=true`, while the normal company rotation uses daily bars. A
+selected company can be prioritized through the on-demand 1D route, which also
+uses the 2-minute extended-hours request.
 
-At one request per 30 seconds:
+At one request per two seconds:
 
-- the default 13-index pass takes approximately 6.5 minutes;
-- one request per 858 unique constituent symbols would take approximately 7.15 hours for a single full pass;
+- the default 13-index pass takes roughly 4.5 minutes in the rotating queue, before backoff or fundamentals work;
+- one request per 858 unique constituent symbols would take approximately 29 minutes for a single full pass if all were intraday requests;
 - a true one-minute refresh for every constituent would require a bulk provider, a radically higher request budget, or a licensed streaming/batch source.
 
 The production health endpoint is:
@@ -520,4 +518,3 @@ Success is not “we made many requests until Yahoo stopped returning 429.” Su
 - a production deployment that can be rolled back safely.
 
 Start by inspecting the current repository and production state described above. Do not assume the existing cache contains all companies. Do not assume the provider’s free endpoint is real-time. Do not assume that a successful health check means every symbol is current.
-
