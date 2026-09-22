@@ -110,7 +110,7 @@
       (tag (div class "trader-chat-body")
         (presc msg!text))
       (unless admin-view
-        (unless (is msg!user (me))
+        (unless (or (no (me)) (is msg!user (me)))
           (urform (chat-flag! arg!id (me))
             (hidden-input 'id msg!id)
             (tag (button class "trader-chat-flag" type "submit")
@@ -167,7 +167,11 @@
       (when (chat-blocked? (me))
         (tag (p class "trader-chat-blocked")
           (pr "Your chat access is currently blocked by a moderator.")))
-      (unless (chat-blocked? (me))
+      (if (no (me))
+          (tag (p class "trader-chat-login")
+            (pr "Log in to post messages. ")
+            (tag (a href "login?goto=chat") (pr "log in")))
+          (unless (chat-blocked? (me))
         (urform (do (chat-add! (me) arg!text) "chat")
           (tag (div class "trader-chat-compose")
             (tag (textarea name "text" rows "3" cols "60"
@@ -175,7 +179,7 @@
               (pr (or arg!text "")))
             (tag (div class "trader-chat-compose-foot")
               (pr "No investment advice or personal data, please. ")
-              (submit "send")))))))))
+              (submit "send"))))))))))
 
 (def chat-admin-page ()
   (if (no (is (chat-key (me)) "failmore"))
@@ -204,10 +208,10 @@
 
 (def chat-user? (user) user)
 
-(defopt chat chat-user? " to chat"
+(defop chat
   (chat-page))
 
-(defopt chat.json chat-user? " to chat"
+(defop chat.json
   (chat-json-page))
 
 (defopt chat-flag chat-user? " to flag chat"

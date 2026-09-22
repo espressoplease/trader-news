@@ -399,6 +399,13 @@ and (max-width : 750px) {
 .trader-chat-note, .trader-terms p {
   line-height: 1.45;
 }
+.trader-chat-login {
+  margin: 12px 0;
+  color: #828282;
+}
+.trader-chat-login a {
+  color: #356da5;
+}
 .trader-chat-messages {
   margin: 15px 0 12px;
   border-top: 1px solid #e0dfd7;
