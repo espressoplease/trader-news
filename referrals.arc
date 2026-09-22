@@ -1,4 +1,4 @@
-; Server-side community referrals and daily page-view analytics.
+; Server-side community referrals and daily unique-visit analytics.
 ; The append-only ledger survives restarts. It contains keyed IP hashes only
 ; for referral deduplication and self-referral checks, never raw addresses.
 (attribute img alt opstring)
