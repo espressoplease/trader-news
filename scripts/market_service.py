@@ -60,6 +60,11 @@ def range_window(range_, quote_row):
 def range_interval(range_, quote_row, connection, symbol):
     """Use the configured chart cadence, falling back to daily bars for 5D."""
     interval=RANGES.get(range_,RANGES['1d'])[0]
+    if range_ == '1d':
+        cutoff, _=range_window(range_,quote_row)
+        if connection.execute("SELECT 1 FROM bars WHERE symbol=? AND interval='2m' AND ts>=? LIMIT 1",(symbol,cutoff)).fetchone(): return '2m'
+        if connection.execute("SELECT 1 FROM bars WHERE symbol=? AND interval='30m' AND ts>=? LIMIT 1",(symbol,cutoff)).fetchone(): return '30m'
+        return '2m'
     if range_ != '5d': return interval
     cutoff, _=range_window(range_,quote_row)
     found=connection.execute("SELECT 1 FROM bars WHERE symbol=? AND interval='30m' AND ts>=? LIMIT 1",(symbol,cutoff)).fetchone()
@@ -260,6 +265,8 @@ class Store:
                 c.execute("DELETE FROM bars WHERE symbol=? AND interval='1d'",(symbol,))
             c.executemany("INSERT INTO bars(symbol,interval,ts,open,high,low,close,adj_close,volume,fetched_at,source) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(symbol,interval,ts) DO UPDATE SET open=excluded.open,high=excluded.high,low=excluded.low,close=excluded.close,adj_close=excluded.adj_close,volume=excluded.volume,fetched_at=excluded.fetched_at,source=excluded.source",bars)
             c.executemany("INSERT INTO extended_bars(symbol,interval,ts,open,high,low,close,volume,session,fetched_at,source) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(symbol,interval,ts) DO UPDATE SET open=excluded.open,high=excluded.high,low=excluded.low,close=excluded.close,volume=excluded.volume,session=excluded.session,fetched_at=excluded.fetched_at,source=excluded.source",extended)
+            if interval=='2m' and not bars:
+                c.execute("INSERT OR IGNORE INTO market_jobs(symbol,interval,period,requested_at) VALUES(?,'30m','5d',?)",(symbol,now()))
             old_quote=c.execute('SELECT pre_market_price,pre_market_time,post_market_price,post_market_time FROM latest_quotes WHERE symbol=?',(symbol,)).fetchone()
             if interval not in ('2m','30m'):
                 pre_price, pre_time=(old_quote['pre_market_price'],old_quote['pre_market_time']) if old_quote else (None,None)
@@ -294,11 +301,13 @@ class Store:
             interval=range_interval(range_, quote_row, c, symbol)
             cutoff, expected_start=range_window(range_, quote_row)
             points=c.execute("SELECT ts,close FROM bars WHERE symbol=? AND interval=? AND ts>=? ORDER BY ts",(symbol,interval,cutoff)).fetchall()
-            extended_points=c.execute("SELECT ts,close,session FROM extended_bars WHERE symbol=? AND interval=? AND ts>=? ORDER BY ts",(symbol,interval,cutoff)).fetchall() if range_=='1d' else []
+            extended_interval='2m' if range_=='1d' else interval
+            extended_points=c.execute("SELECT ts,close,session FROM extended_bars WHERE symbol=? AND interval=? AND ts>=? ORDER BY ts",(symbol,extended_interval,cutoff)).fetchall() if range_=='1d' else []
             base=quote_baseline(c,symbol,range_,quote_row,cutoff)
         payload=range_response(symbol, range_, quote_row, points, expected_start,base)
         payload['extendedPoints']=[{'ts':row['ts']*1000,'close':row['close'],'session':row['session']} for row in extended_points]
         payload['extendedOnly']=bool(not payload['points'] and payload['extendedPoints'])
+        payload['previousSession']=bool(range_=='1d' and quote_row and quote_row['market_state']=='PRE' and points)
         return self.with_fundamentals(payload)
     def quote(self,symbol,range_):
         # A quote needs only its first in-range close, never the complete chart.

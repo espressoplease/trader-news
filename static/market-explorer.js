@@ -105,7 +105,7 @@
   function stats(points) { points = clean(points); if (points.length < 2) return {}; var first = points[0].close, last = points[points.length - 1].close; return {last:last, move:first ? ((last - first) / first * 100) : null, low:Math.min.apply(null, points.map(function (p) { return p.close; })), high:Math.max.apply(null, points.map(function (p) { return p.close; }))}; }
   function chartPoints(record) {
     var regular = clean(record && record.points);
-    return regular.length ? {points:regular, extendedOnly:false} : {points:clean(record && record.extendedPoints), extendedOnly:!!(record && record.extendedOnly)};
+    return regular.length ? {points:regular, extendedOnly:false, previousSession:!!(record && record.previousSession)} : {points:clean(record && record.extendedPoints), extendedOnly:!!(record && record.extendedOnly), previousSession:false};
   }
   function draw(points, label, extendedOnly, emptyMessage) {
     var chart = el('market-chart'); points = clean(points);
@@ -203,10 +203,10 @@
     text('market-constituent-count', market.constituents.length + ' companies'); updateSortButtons(); text('market-constituent-summary', rows.length + ' matches · all loaded');
   }
   function renderDetail(entity, record) {
-    var plotted = chartPoints(record), points = plotted.points, s = stats(points), value = finite(record && record.price) ? record.price : s.last, move = record && (state.range === '1d' ? record.dayChangePct : record.periodChangePct), chartLabel = plotted.extendedOnly ? 'premarket' : ranges[state.range];
+    var plotted = chartPoints(record), points = plotted.points, s = stats(points), value = finite(record && record.price) ? record.price : s.last, move = record && (state.range === '1d' ? record.dayChangePct : record.periodChangePct), chartLabel = plotted.extendedOnly ? 'premarket' : plotted.previousSession ? 'previous regular session' : ranges[state.range];
     text('market-detail-name', entity.name); text('market-detail-symbol', entity.symbol); text('market-detail-last', number(value) + (entity.type === 'company' && record && record.currency ? ' ' + record.currency : '')); var change = el('market-detail-change'); if (change) { change.textContent = percent(move); changeClass(change, move); } var extended = el('market-detail-extended'); if (extended) { extended.textContent = extendedText(record); extended.title = extendedText(record) ? badgeTitle(record) : ''; }
     if (entity.type === 'company') renderFundamentals(record || {});
-    draw(points, entity.name, plotted.extendedOnly, record && record.marketState === 'CLOSED' ? 'Market closed. Intraday history is not cached for this symbol yet.' : 'No history is available yet.'); text('market-chart-caption', chartLabel + ' price history' + (plotted.extendedOnly ? ' · regular-session bars have not arrived yet' : '') + ' · ' + (points.length ? new Date(points[0].ts).toLocaleDateString() + ' to ' + new Date(points[points.length-1].ts).toLocaleDateString() + ' · ' : '') + sourceLine(record)); text('market-source', sourceLine(record));
+    draw(points, entity.name, plotted.extendedOnly, record && record.marketState === 'CLOSED' ? 'Market closed. Intraday history is not cached for this symbol yet.' : 'No history is available yet.'); text('market-chart-caption', chartLabel + ' price history' + (plotted.extendedOnly ? ' · regular-session bars have not arrived yet' : plotted.previousSession ? ' · market is currently premarket' : '') + ' · ' + (points.length ? new Date(points[0].ts).toLocaleDateString() + ' to ' + new Date(points[points.length-1].ts).toLocaleDateString() + ' · ' : '') + sourceLine(record)); text('market-source', sourceLine(record));
   }
   function selectEntity(entity) {
     state.entity = entity; saveView(); state.token++; var token = state.token; el('market-detail').className = 'market-detail';

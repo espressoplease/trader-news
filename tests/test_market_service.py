@@ -57,6 +57,18 @@ class MarketServiceTest(unittest.TestCase):
   feed=self.s.feed('X','1d')
   self.assertEqual([(p['close'],p['session']) for p in feed['extendedPoints']],[(9,'pre'),(10,'pre')])
   self.assertFalse(feed['extendedOnly'])
+ def test_premarket_only_2m_queues_previous_session_fallback(self):
+  n=m.now()//120*120
+  p=payload([n-240,n-120],[9,10])
+  result=p['chart']['result'][0]
+  result['meta']['regularMarketPrice']=8
+  result['meta']['regularMarketTime']=n-86400
+  result['meta']['currentTradingPeriod']={'pre':{'start':n-240,'end':n+3600},'regular':{'start':n+3600,'end':n+7200},'post':{'start':n+7200,'end':n+10800}}
+  self.s.add_instruments({'X':('X','company')})
+  self.s.upsert_chart('X','2m',p,fetched=n)
+  with self.s.connect() as c:
+   job=c.execute("select interval,period from market_jobs where symbol='X'").fetchone()
+  self.assertEqual((job['interval'],job['period']),('30m','5d'))
  def test_429_uses_retry_after_global_backoff(self):
   rows={'X':('X','company')}; self.s.add_instruments(rows); worker=m.Collector(self.s,rows,[])
   worker.handle_failure('X',m.ProviderError('slow down',429,91))
