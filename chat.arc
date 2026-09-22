@@ -211,7 +211,7 @@
 (defop chat
   (chat-page))
 
-(defop chat.json
+(defopr chat.json
   (chat-json-page))
 
 (defopt chat-flag chat-user? " to flag chat"
