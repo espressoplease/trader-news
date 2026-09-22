@@ -54,6 +54,9 @@ class MarketServiceTest(unittest.TestCase):
   self.assertEqual((latest['pre_market_price'],latest['pre_market_time'],latest['market_state']),(10,n-120,'PRE'))
   quote=self.s.quote('X','1d')
   self.assertEqual((quote['preMarketPrice'],quote['preMarketTime'],quote['marketState']),(10,n-120,'PRE'))
+  feed=self.s.feed('X','1d')
+  self.assertEqual([(p['close'],p['session']) for p in feed['extendedPoints']],[(9,'pre'),(10,'pre')])
+  self.assertFalse(feed['extendedOnly'])
  def test_429_uses_retry_after_global_backoff(self):
   rows={'X':('X','company')}; self.s.add_instruments(rows); worker=m.Collector(self.s,rows,[])
   worker.handle_failure('X',m.ProviderError('slow down',429,91))

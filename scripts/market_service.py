@@ -294,8 +294,12 @@ class Store:
             interval=range_interval(range_, quote_row, c, symbol)
             cutoff, expected_start=range_window(range_, quote_row)
             points=c.execute("SELECT ts,close FROM bars WHERE symbol=? AND interval=? AND ts>=? ORDER BY ts",(symbol,interval,cutoff)).fetchall()
+            extended_points=c.execute("SELECT ts,close,session FROM extended_bars WHERE symbol=? AND interval=? AND ts>=? ORDER BY ts",(symbol,interval,cutoff)).fetchall() if range_=='1d' else []
             base=quote_baseline(c,symbol,range_,quote_row,cutoff)
-        return self.with_fundamentals(range_response(symbol, range_, quote_row, points, expected_start,base))
+        payload=range_response(symbol, range_, quote_row, points, expected_start,base)
+        payload['extendedPoints']=[{'ts':row['ts']*1000,'close':row['close'],'session':row['session']} for row in extended_points]
+        payload['extendedOnly']=bool(not payload['points'] and payload['extendedPoints'])
+        return self.with_fundamentals(payload)
     def quote(self,symbol,range_):
         # A quote needs only its first in-range close, never the complete chart.
         with self.connect() as c:

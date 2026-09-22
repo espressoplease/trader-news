@@ -103,14 +103,27 @@
     state.quotes[key] = {promise:request, savedAt:Date.now()}; return request;
   }
   function stats(points) { points = clean(points); if (points.length < 2) return {}; var first = points[0].close, last = points[points.length - 1].close; return {last:last, move:first ? ((last - first) / first * 100) : null, low:Math.min.apply(null, points.map(function (p) { return p.close; })), high:Math.max.apply(null, points.map(function (p) { return p.close; }))}; }
-  function draw(points, label) {
+  function chartPoints(record) {
+    var regular = clean(record && record.points);
+    return regular.length ? {points:regular, extendedOnly:false} : {points:clean(record && record.extendedPoints), extendedOnly:!!(record && record.extendedOnly)};
+  }
+  function draw(points, label, extendedOnly, emptyMessage) {
     var chart = el('market-chart'); points = clean(points);
     if (!chart) return;
-    if (points.length < 2) { chart.innerHTML = '<div class="market-chart-loading">No history is available yet.</div>'; return; }
-    var width = 640, height = 132, pad = 16, values = points.map(function (p) { return p.close; }), lo = Math.min.apply(null, values), hi = Math.max.apply(null, values), span = hi - lo || 1;
-    var coords = points.map(function (point, i) { return [pad + i / (points.length - 1) * (width - 2 * pad), height - pad - (point.close - lo) / span * (height - 2 * pad)]; });
-    var line = coords.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' '), change = stats(points).move, color = change < 0 ? '#b14b3f' : '#39824a';
-    chart.innerHTML = '<svg viewBox="0 0 640 132" preserveAspectRatio="none" role="img" aria-label="' + label.replace(/"/g, '') + ' chart"><polyline points="' + line + '" fill="none" stroke="' + color + '" stroke-width="2" /></svg>';
+    if (points.length < 2) { var empty = document.createElement('div'); empty.className = 'market-chart-loading'; empty.textContent = emptyMessage || 'No history is available yet.'; chart.innerHTML = ''; chart.appendChild(empty); return; }
+    var width = 640, height = 168, left = 42, right = 10, top = 12, bottom = 26, values = points.map(function (p) { return p.close; }), lo = Math.min.apply(null, values), hi = Math.max.apply(null, values), span = hi - lo || Math.max(Math.abs(hi) * .01, 1);
+    var coords = points.map(function (point, i) { return [left + i / (points.length - 1) * (width - left - right), height - bottom - (point.close - lo) / span * (height - top - bottom)]; });
+    var line = coords.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' '), change = stats(points).move, color = extendedOnly ? '#8b7b6c' : change < 0 ? '#b14b3f' : '#39824a';
+    var mid = lo + span / 2, ticks = [[top,hi],[top + (height - top - bottom) / 2,mid],[height - bottom,lo]], grid = ticks.map(function (tick) { return '<line class="market-chart-grid" x1="' + left + '" y1="' + tick[0].toFixed(1) + '" x2="' + (width - right) + '" y2="' + tick[0].toFixed(1) + '" /><text class="market-chart-axis-label" x="2" y="' + (tick[0] + 3).toFixed(1) + '">' + number(tick[1]) + '</text>'; }).join('');
+    chart.innerHTML = '<svg viewBox="0 0 640 168" preserveAspectRatio="none" role="img" aria-label="' + label.replace(/"/g, '') + ' chart"><g>' + grid + '</g><polyline class="market-chart-line' + (extendedOnly ? ' is-extended' : '') + '" points="' + line + '" fill="none" stroke="' + color + '" stroke-width="2" /><line class="market-chart-hover-line" x1="0" y1="' + top + '" x2="0" y2="' + (height - bottom) + '" /><circle class="market-chart-hover-dot" cx="0" cy="0" r="3" /><g class="market-chart-tooltip"><rect class="market-chart-tooltip-bg" x="0" y="0" width="174" height="28" rx="2" /><text class="market-chart-tooltip-text" x="7" y="11"> </text><text class="market-chart-tooltip-text" x="7" y="22"> </text></g></svg>';
+    var svg = chart.querySelector('svg'), hoverLine = chart.querySelector('.market-chart-hover-line'), hoverDot = chart.querySelector('.market-chart-hover-dot'), tooltip = chart.querySelector('.market-chart-tooltip'), tooltipBg = chart.querySelector('.market-chart-tooltip-bg'), tooltipText = chart.querySelectorAll('.market-chart-tooltip-text');
+    var hover = document.createElementNS('http://www.w3.org/2000/svg','rect'); hover.setAttribute('x',left); hover.setAttribute('y',top); hover.setAttribute('width',width-left-right); hover.setAttribute('height',height-top-bottom); hover.setAttribute('fill','transparent'); hover.setAttribute('class','market-chart-hover'); svg.appendChild(hover);
+    function hideHover () { tooltip.setAttribute('visibility','hidden'); hoverLine.setAttribute('visibility','hidden'); hoverDot.setAttribute('visibility','hidden'); }
+    function showHover (event) {
+      var bounds = svg.getBoundingClientRect(), ratio = bounds.width ? (event.clientX - bounds.left) / bounds.width : 0, x = left + Math.max(0,Math.min(1,ratio)) * (width-left-right), index = Math.round((x-left) / (width-left-right) * (points.length-1)), point = points[index], coord = coords[index], tooltipX = Math.max(left,Math.min(width-right-174,coord[0]-87));
+      hoverLine.setAttribute('x1',coord[0]); hoverLine.setAttribute('x2',coord[0]); hoverLine.setAttribute('visibility','visible'); hoverDot.setAttribute('cx',coord[0]); hoverDot.setAttribute('cy',coord[1]); hoverDot.setAttribute('visibility','visible'); tooltip.setAttribute('transform','translate(' + tooltipX + ' ' + (top+4) + ')'); tooltip.setAttribute('visibility','visible'); tooltipBg.setAttribute('stroke',color); tooltipText[0].textContent = new Date(point.ts).toLocaleString(); tooltipText[1].textContent = number(point.close) + (extendedOnly ? ' · extended hours' : '');
+    }
+    hover.addEventListener('mousemove',showHover); hover.addEventListener('mouseleave',hideHover); hover.addEventListener('touchmove',function (event) { if (event.touches && event.touches[0]) showHover(event.touches[0]); },{passive:true}); hideHover();
   }
   function setRail(market, record) {
     var card = el('market-' + market.key); if (!card) return;
@@ -190,10 +203,10 @@
     text('market-constituent-count', market.constituents.length + ' companies'); updateSortButtons(); text('market-constituent-summary', rows.length + ' matches · all loaded');
   }
   function renderDetail(entity, record) {
-    var points = clean(record && record.points), s = stats(points), value = finite(record && record.price) ? record.price : s.last, move = record && (state.range === '1d' ? record.dayChangePct : record.periodChangePct);
+    var plotted = chartPoints(record), points = plotted.points, s = stats(points), value = finite(record && record.price) ? record.price : s.last, move = record && (state.range === '1d' ? record.dayChangePct : record.periodChangePct), chartLabel = plotted.extendedOnly ? 'premarket' : ranges[state.range];
     text('market-detail-name', entity.name); text('market-detail-symbol', entity.symbol); text('market-detail-last', number(value) + (entity.type === 'company' && record && record.currency ? ' ' + record.currency : '')); var change = el('market-detail-change'); if (change) { change.textContent = percent(move); changeClass(change, move); } var extended = el('market-detail-extended'); if (extended) { extended.textContent = extendedText(record); extended.title = extendedText(record) ? badgeTitle(record) : ''; }
     if (entity.type === 'company') renderFundamentals(record || {});
-    draw(points, entity.name); text('market-chart-caption', ranges[state.range] + ' price history · ' + (points.length ? new Date(points[0].ts).toLocaleDateString() + ' to ' + new Date(points[points.length-1].ts).toLocaleDateString() + ' · ' : '') + sourceLine(record)); text('market-source', sourceLine(record));
+    draw(points, entity.name, plotted.extendedOnly, record && record.marketState === 'CLOSED' ? 'Market closed. Intraday history is not cached for this symbol yet.' : 'No history is available yet.'); text('market-chart-caption', chartLabel + ' price history' + (plotted.extendedOnly ? ' · regular-session bars have not arrived yet' : '') + ' · ' + (points.length ? new Date(points[0].ts).toLocaleDateString() + ' to ' + new Date(points[points.length-1].ts).toLocaleDateString() + ' · ' : '') + sourceLine(record)); text('market-source', sourceLine(record));
   }
   function selectEntity(entity) {
     state.entity = entity; saveView(); state.token++; var token = state.token; el('market-detail').className = 'market-detail';
