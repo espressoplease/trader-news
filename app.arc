@@ -183,7 +183,14 @@
 
 (def get-user ((t req))
   (whenlets u (user-from-cookie req)
-    (= (logins* u) (ip))))
+    ; A cookie can outlive the account indexes after a restore or an
+    ; interrupted account write.  Do not let an orphaned session reach
+    ; profile-dependent page code, where it would otherwise render a blank
+    ; response.  The next login or registration can establish a fresh
+    ; session normally.
+    (if (and (acct-exists u) (lookup-uid u))
+        (= (logins* u) (ip))
+        (do (logout-user u) nil))))
 
 (def cook-user! (user)
   (do1 (link-cookie user)

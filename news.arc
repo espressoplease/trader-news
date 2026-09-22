@@ -135,7 +135,12 @@
 (def profile ((t u me))
   (or (profs* u)
       (whenlet p (load-prof u)
-        (or= (profs* u) p))))
+        (or= (profs* u) p))
+      ; Re-create the news profile for a valid account if its profile file
+      ; was lost, while keeping stale/orphaned cookies harmless.
+      (when (and u (acct-exists u) (lookup-uid u))
+        (init-user u)
+        (profs* u))))
 
 (def load-prof (u)
   ; Have to check goodname because some user ids come from http requests.
@@ -742,7 +747,7 @@
                  nil)))))
 
 (def seesdead ((t user me))
-  (or (and user (uvar user showdead))
+  (or (and user (profile user) (uvar user showdead))
       (editor user)))
 
 (def visible (items)
@@ -1420,7 +1425,6 @@
                      (fn ,args
                        (tostring (w/me nil ,@body))))
        (def ,name ,args
-         (unless (is (op) "rss") (referral-track-page))
          (if (me)
              (do ,@body)
              (pr (,gc ,@args)))))))
