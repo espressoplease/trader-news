@@ -86,10 +86,14 @@ a:visited { color:#828282; text-decoration:none; }
 .market-count { color:#555; font:8px monospace; }
 .market-constituent-tools { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
 .market-constituent-tools input { border:1px solid #ead8c0; color:#555; font:8px monospace; min-width:0; padding:3px 4px; width:100%; }
-.market-sort, .market-filter, .market-show-more { background:#fffaf4; border:1px solid #ead8c0; color:#8b7b6c; cursor:pointer; font:8px Verdana, sans-serif; padding:3px 5px; white-space:nowrap; }
-.market-sort:hover, .market-filter:hover, .market-filter.is-selected, .market-show-more:hover { background:var(--market-tint); border-color:var(--market-border); color:#222; }
+.market-filter { background:#fffaf4; border:1px solid #ead8c0; color:#8b7b6c; cursor:pointer; font:8px Verdana, sans-serif; padding:3px 5px; white-space:nowrap; }
+.market-filter:hover, .market-filter.is-selected { background:var(--market-tint); border-color:var(--market-border); color:#222; }
 .market-constituent-legend, .market-constituent { align-items:baseline; display:grid; gap:4px; grid-template-columns:minmax(0,1fr) 54px 48px 48px 62px 38px 42px; }
 .market-constituent-legend { background:#fffaf4; color:#a69482; font-size:7px; padding:4px 0; position:sticky; top:0; z-index:1; text-transform:uppercase; }
+.market-column-sort { background:transparent; border:0; color:#a69482; cursor:pointer; font:inherit; overflow:hidden; padding:0; text-align:right; text-overflow:ellipsis; text-transform:uppercase; white-space:nowrap; }
+.market-column-sort:first-child { text-align:left; }
+.market-column-sort:hover, .market-column-sort.is-active { color:var(--market-accent,#39824a); }
+.market-column-sort.is-active { font-weight:bold; }
 .market-legend-price, .market-legend-move, .market-legend-cap, .market-legend-pe, .market-legend-yield { text-align:right; }
 .market-constituent-scroll { margin-top:6px; max-height:200px; overflow:auto; }
 .market-constituents { display:grid; gap:2px; grid-template-columns:1fr; margin-top:4px; }
@@ -104,7 +108,6 @@ a:visited { color:#828282; text-decoration:none; }
 .market-constituent > .market-constituent-day { color:var(--market-day-accent,#39824a); }
 .market-constituent > .market-constituent-day.is-negative { color:var(--market-day-negative,#b14b3f); }
 .market-constituent-foot { color:#a69482; font-size:8px; gap:6px; margin-top:4px; }
-.market-show-more { display:none; }
 .market-company-detail { align-self:start; background:var(--market-tint); border:1px solid var(--market-border); box-sizing:border-box; grid-column:2; grid-row:1; margin-top:5px; min-width:0; padding:6px; }
 .market-company-detail-head { align-items:baseline; display:flex; justify-content:space-between; }
 .market-company-detail-close { background:transparent; border:0; color:#8b7b6c; cursor:pointer; font:8px Verdana, sans-serif; text-decoration:underline; }

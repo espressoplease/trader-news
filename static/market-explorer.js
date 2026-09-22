@@ -2,7 +2,7 @@
 (function () {
   var markets = window.FINANCE_MARKETS || [];
   var ranges = { '1d':'1D', '5d':'5D', '1mo':'1M', '3mo':'3M', '6mo':'6M', 'ytd':'YTD', '1y':'1Y', '5y':'5Y' };
-  var byKey = {}, state = { market:null, entity:null, range:'1d', filter:'all', sort:'move', limit:100, token:0, feeds:{}, quotes:{}, quotePromise:null };
+  var byKey = {}, state = { market:null, entity:null, range:'1d', filter:'all', sort:'move', sortDirection:'desc', token:0, feeds:{}, quotes:{}, quotePromise:null };
   var pollTimer, visible = !document.hidden;
   markets.forEach(function (market) { byKey[market.key] = market; });
   var viewStorageKey = 'trader-news.market-view.v1';
@@ -13,7 +13,7 @@
     if (!state.market || !state.entity) return;
     try { localStorage.setItem(viewStorageKey, JSON.stringify({
       market:state.market.key, symbol:state.entity.symbol, range:state.range,
-      filter:state.filter, sort:state.sort, search:el('market-constituent-search').value,
+      filter:state.filter, sort:state.sort, sortDirection:state.sortDirection, search:el('market-constituent-search').value,
       collapsed:el('market-strip').classList.contains('is-collapsed')
     })); } catch (_) { /* Browsing still works when storage is unavailable. */ }
   }
@@ -126,13 +126,48 @@
     row.style.setProperty('--market-row-bg', 'rgba(' + rgb + ',' + alpha.toFixed(2) + ')');
   }
   function quoteMap(entries) { var map = {}; (entries || []).forEach(function (q) { map[q.symbol] = q; }); return map; }
+  function sortValue(row) {
+    if (state.sort === 'name') return row.name;
+    if (state.sort === 'price') return row.quote.price;
+    if (state.sort === 'day') return row.quote.dayChangePct;
+    if (state.sort === 'move') return row.move;
+    if (state.sort === 'marketCap') return row.quote.marketCap;
+    if (state.sort === 'pe') return row.quote.trailingPE;
+    if (state.sort === 'yield') return row.quote.dividendYieldPct;
+    return row.move;
+  }
+  function compareRows(a, b) {
+    var av = sortValue(a), bv = sortValue(b), direction = state.sortDirection === 'asc' ? 1 : -1;
+    if (typeof av === 'string' || typeof bv === 'string') {
+      av = String(av || '').toLowerCase(); bv = String(bv || '').toLowerCase();
+      return (av.localeCompare(bv) || a.ticker.localeCompare(b.ticker)) * direction;
+    }
+    if (!finite(av) && !finite(bv)) return a.name.localeCompare(b.name);
+    if (!finite(av)) return 1;
+    if (!finite(bv)) return -1;
+    return ((av === bv ? a.name.localeCompare(b.name) : av - bv) * direction);
+  }
+  function updateSortButtons() {
+    var buttons = document.querySelectorAll('.market-column-sort'), labels = {
+      name:'company', price:'price', day:'day', move:ranges[state.range],
+      marketCap:'market cap', pe:'P/E', yield:'yield'
+    };
+    for (var i=0;i<buttons.length;i++) {
+      var button = buttons[i], key = button.id.replace('market-sort-', ''), sort = key === 'market-cap' ? 'marketCap' : key;
+      button.className = button.className.replace(/\bis-active\b/g, '').replace(/\bis-ascending\b/g, '').replace(/\bis-descending\b/g, '');
+      if (sort === state.sort) {
+        button.className += ' is-active ' + (state.sortDirection === 'asc' ? 'is-ascending' : 'is-descending');
+        button.textContent = labels[sort] + (state.sortDirection === 'asc' ? ' ↑' : ' ↓');
+      } else button.textContent = labels[sort];
+    }
+  }
   function renderRows(entries) {
     var market = state.market, target = el('market-constituents'); if (!market || !target) return;
     var query = (el('market-constituent-search').value || '').toLowerCase(), quotes = quoteMap(entries), rows = market.constituents.map(function (company) { var q = quotes[company[0]] || {}; return {ticker:company[0], name:company[1], meta:company[2] || {}, quote:q, move:state.range === '1d' ? q.dayChangePct : q.periodChangePct}; });
     rows = rows.filter(function (row) { var found = !query || (row.ticker + ' ' + row.name).toLowerCase().indexOf(query) >= 0; var direction = state.filter === 'all' || (state.filter === 'gainers' && row.move > 0) || (state.filter === 'losers' && row.move < 0); return found && direction; });
-    rows.sort(function (a,b) { if (state.sort === 'name') return a.name.localeCompare(b.name); var av = state.sort === 'price' ? a.quote.price : a.move, bv = state.sort === 'price' ? b.quote.price : b.move; if (!finite(av) && !finite(bv)) return a.name.localeCompare(b.name); if (!finite(av)) return 1; if (!finite(bv)) return -1; return bv - av; });
+    rows.sort(compareRows);
     target.innerHTML = '';
-    rows.slice(0, state.limit).forEach(function (row) {
+    rows.forEach(function (row) {
       var node = document.createElement('div'), ident = document.createElement('span'), price = document.createElement('span'), day = document.createElement('span'), period = document.createElement('span'), cap = document.createElement('span'), pe = document.createElement('span'), yieldValue = document.createElement('span'), badge = document.createElement('span');
       var info = window.FINANCE_COMPANY_INFO ? window.FINANCE_COMPANY_INFO(row.ticker, row.name, market.name) : null;
       node.className = 'market-constituent'; node.tabIndex = 0; node.setAttribute('role', 'button'); node.title = info ? info.description + '\nClick for chart, detail, and research links.' : badgeTitle(row.quote); ident.className = 'market-constituent-ident'; price.className = 'market-constituent-price'; day.className = 'market-constituent-day market-constituent-move'; period.className = 'market-constituent-period market-constituent-move'; cap.className = 'market-constituent-cap'; pe.className = 'market-constituent-pe'; yieldValue.className = 'market-constituent-yield'; badge.className = 'market-row-badge';
@@ -140,8 +175,7 @@
       [ident, price, day, period, cap, pe, yieldValue, badge].forEach(function (child) { node.appendChild(child); });
       function select() { loadCompany(row); } node.addEventListener('click', select); node.addEventListener('keydown', function (event) { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); } }); target.appendChild(node);
     });
-    text('market-constituent-count', market.constituents.length + ' companies'); text('market-legend-range', ranges[state.range]); text('market-constituent-summary', 'showing ' + Math.min(rows.length, state.limit) + ' of ' + rows.length + ' matches');
-    var more = el('market-show-more'); more.style.display = rows.length > state.limit ? 'inline-block' : 'none';
+    text('market-constituent-count', market.constituents.length + ' companies'); updateSortButtons(); text('market-constituent-summary', rows.length + ' matches · all loaded');
   }
   function renderDetail(entity, record) {
     var points = clean(record && record.points), s = stats(points), value = finite(record && record.price) ? record.price : s.last, move = record && (state.range === '1d' ? record.dayChangePct : record.periodChangePct);
@@ -171,7 +205,7 @@
     }).catch(function() { if (state.market === market && state.range === range) text('market-constituent-summary', 'Quote refresh unavailable. Previously received data is retained.'); });
   }
   function loadMarket(market, company) {
-    state.market = market; state.limit = 100;
+    state.market = market;
     document.querySelectorAll('.market-index').forEach(function(button) { button.classList.toggle('is-open', button.id === 'market-' + market.key); });
     if (company) loadCompany({ticker:company[0], name:company[1], quote:{}});
     else selectEntity({type:'index', name:market.name, symbol:market.symbol});
@@ -196,17 +230,20 @@
   }
   function init() {
     if (!el('market-strip') || !markets.length) return; createRail();
-    Object.keys(ranges).forEach(function (range) { var button = el('market-range-' + range); if (button) button.addEventListener('click', function () { state.range = range; state.limit = 100; selectEntity(state.entity); renderRows([]); updateRows(false); }); });
+    Object.keys(ranges).forEach(function (range) { var button = el('market-range-' + range); if (button) button.addEventListener('click', function () { state.range = range; selectEntity(state.entity); renderRows([]); updateRows(false); }); });
     ['all','gainers','losers'].forEach(function (filter) { var button = el('market-filter-' + filter); if (button) button.addEventListener('click', function () { state.filter = filter; saveView(); document.querySelectorAll('.market-filter').forEach(function (b) { b.className = b.className.replace(/\bis-selected\b/g, '') + (b === button ? ' is-selected' : ''); }); updateRows(false); }); });
-    el('market-constituent-search').addEventListener('input', function () { saveView(); updateRows(false); }); el('market-constituent-sort').addEventListener('click', function () { state.sort = state.sort === 'move' ? 'name' : state.sort === 'name' ? 'price' : 'move'; text('market-constituent-sort', 'sort: ' + state.sort); saveView(); updateRows(false); }); el('market-show-more').addEventListener('click', function () { state.limit += 100; updateRows(false); });
+    el('market-constituent-search').addEventListener('input', function () { saveView(); updateRows(false); });
+    var sortKeys = ['name','price','day','move','market-cap','pe','yield'];
+    sortKeys.forEach(function (key) { var button = el('market-sort-' + key); if (button) button.addEventListener('click', function () { var sort = key === 'market-cap' ? 'marketCap' : key; if (state.sort === sort) state.sortDirection = state.sortDirection === 'asc' ? 'desc' : 'asc'; else { state.sort = sort; state.sortDirection = sort === 'name' ? 'asc' : 'desc'; } updateSortButtons(); saveView(); updateRows(false); }); });
     el('market-toggle').addEventListener('click', function () { var strip = el('market-strip'), closed = /\bis-collapsed\b/.test(strip.className); strip.className = strip.className.replace(/\bis-collapsed\b/g, '') + (closed ? '' : ' is-collapsed'); this.textContent = closed ? 'collapse' : 'expand'; saveView(); }); el('market-company-detail-close').addEventListener('click', function () { if (state.market) loadMarket(state.market); });
     document.addEventListener('visibilitychange', function () { visible = !document.hidden; window.clearTimeout(pollTimer); if (visible) schedulePoll(Math.random() * 3000); }); var saved = savedView(), market = markets.find(function (m) { return m.key === saved.market; }) || markets[0];
     if (Object.prototype.hasOwnProperty.call(ranges, saved.range)) state.range = saved.range;
     if (['all','gainers','losers'].indexOf(saved.filter) >= 0) state.filter = saved.filter;
-    if (['move','name','price'].indexOf(saved.sort) >= 0) state.sort = saved.sort;
+    if (['move','name','price','day','marketCap','pe','yield'].indexOf(saved.sort) >= 0) state.sort = saved.sort;
+    if (saved.sortDirection === 'asc' || saved.sortDirection === 'desc') state.sortDirection = saved.sortDirection;
     if (typeof saved.search === 'string') el('market-constituent-search').value = saved.search;
     document.querySelectorAll('.market-filter').forEach(function (button) { button.classList.toggle('is-selected', button.id === 'market-filter-' + state.filter); });
-    text('market-constituent-sort', 'sort: ' + state.sort);
+    updateSortButtons();
     if (saved.collapsed === true) { el('market-strip').classList.add('is-collapsed'); text('market-toggle', 'expand'); }
     var company = market.constituents.find(function (c) { return c[0] === saved.symbol; });
     loadMarket(market, company); refresh(); schedulePoll();
