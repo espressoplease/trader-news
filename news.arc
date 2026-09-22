@@ -832,8 +832,6 @@
                  (admin-bar (- (msec) ,gt) ,whence)))))))
 
 (def footer ()
-  (referral-analytics)
-  (cohort-analytics)
   (when (me) (referral-banner))
   (spanclass yclinks
     (w/bars
@@ -844,6 +842,7 @@
       (tag (a href "https://github.com/espressoplease/trader-news"
               target "_blank" rel "noopener noreferrer")
         (pr "GitHub"))
+      (link "Analytics" "analytics")
       (link "Terms"       "terms")
       (link "API"         "https://github.com/HackerNews/API")
       (link "Security"    "security.html")
@@ -1179,6 +1178,21 @@
 (load "cohort-analytics.arc")
 (defbg cohort-analytics-flush 900
   (cohort-flush))
+
+(defop analytics
+  (shortpage nil nil "Analytics" "analytics"
+    (tag (div class "analytics-page")
+      (tag (h1) (pr "Trader News analytics"))
+      (tag (p class "analytics-page-intro")
+        (pr "A compact view of community activity and returning visits. "
+            "Counts are approximate page-load activity, not unique-user totals."))
+      (referral-analytics)
+      (tag (section class "analytics-cohorts")
+        (tag (h2) (pr "Audience cohorts"))
+        (tag (p class "analytics-section-note")
+          (pr "Rows group visitors by the week they first arrived. "
+              "Columns show page-load visits from those cohorts in later weeks."))
+        (cohort-analytics-page)))))
 
 
 ; News Admin

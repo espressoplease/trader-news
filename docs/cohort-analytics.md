@@ -19,12 +19,18 @@ assets, and JSON endpoints do not load the client tracker. One person opening
 several pages therefore produces several page-load visits. The cohort table is
 retention activity, not a unique-user report.
 
-The footer contains a collapsed `Audience cohorts` table. Rows are first-visit
-weeks, columns are recent visit weeks, and the diagonal is the cohort's birth
-week activity. A separate unattributed row covers private browsing, blocked
-storage, and opted-out visits. The table is deliberately compact and uses the
-existing market accent, tint, and border variables rather than importing a
-separate analytics design system.
+The main footer links to a dedicated `/analytics` page rather than placing
+analytics in every page's footer. That page contains the community activity
+chart and one normal, visible `Audience cohorts` section. Rows are first-visit
+weeks, columns are visit weeks, and the diagonal is the cohort's birth-week
+activity. The full retained history is available, with a separate unattributed
+row covering private browsing, blocked storage, and opted-out visits.
+
+The table wrapper follows SmallDocs' bounded horizontal-scroll pattern. It
+keeps a readable intrinsic table width as weeks accumulate, enables touch
+scrolling on narrow screens, and shows a subtle right-edge cue while more
+columns are available. It uses Trader News's existing market accent, tint, and
+border variables rather than importing SmallDocs CSS.
 
 To opt out, expand the table and select `opt out`. The browser stores the
 sentinel value `opt-out`, and later page loads are counted as unattributed.

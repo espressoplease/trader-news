@@ -69,10 +69,31 @@
     }
   }
 
+  function wireTableOverflow() {
+    var wrappers = document.querySelectorAll('.cohort-table-scroll');
+    for (var i = 0; i < wrappers.length; i++) {
+      (function (tableWrap) {
+        function update() {
+          var overflowing = tableWrap.scrollWidth > tableWrap.clientWidth + 1;
+          tableWrap.classList.toggle('has-overflow', overflowing);
+          tableWrap.classList.toggle('scrolled-end', overflowing &&
+            tableWrap.scrollLeft + tableWrap.clientWidth >= tableWrap.scrollWidth - 1);
+        }
+        update();
+        tableWrap.addEventListener('scroll', update, { passive: true });
+        window.addEventListener('resize', update);
+      }(wrappers[i]));
+    }
+  }
+
   sendVisit();
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', wireOptOut);
+    document.addEventListener('DOMContentLoaded', function () {
+      wireOptOut();
+      wireTableOverflow();
+    });
   } else {
     wireOptOut();
+    wireTableOverflow();
   }
 }());

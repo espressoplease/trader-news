@@ -84,16 +84,12 @@
   (register-bgstop-hook 'cohort-analytics cohort-flush))
 
 (def cohort-table-weeks ()
-  (let weeks (sort < (keys cohort-weeks*))
-    (if (> (len weeks) 8)
-        (nthcdr (- (len weeks) 8) weeks)
-        weeks)))
+  ; The dedicated page can expose the full history. Its bounded wrapper keeps
+  ; older weeks usable through horizontal scrolling instead of hiding them.
+  (sort < (keys cohort-weeks*)))
 
 (def cohort-table-cohorts ()
-  (let cohorts (sort < (keys cohort-cohorts*))
-    (if (> (len cohorts) 12)
-        (nthcdr (- (len cohorts) 12) cohorts)
-        cohorts)))
+  (sort < (keys cohort-cohorts*)))
 
 (def cohort-short-week (week)
   (string (cut week 2 4) "W" (cut week 6 8)))
@@ -135,15 +131,18 @@
                     (tag (td)
                       (pr (cohort-cell "" week))))))))))))
 
-(def cohort-analytics ()
+(def cohort-privacy-controls ()
+  (tag (p class "cohort-privacy")
+    (pr "Weekly grouping only. No visitor IDs are stored. "
+        "Market and background API requests are excluded. ")
+    (tag (button type "button" class "cohort-optout") (pr "opt out"))))
+
+(def cohort-analytics-page ()
+  ; The cohort table is a normal section on the dedicated analytics page,
+  ; rather than a nested details element, so all analytics share one place.
   (w/lock cohort-lock*
-    (tag (details class "cohort-analytics")
-      (tag (summary) (pr "Audience cohorts"))
-      (cohort-table)
-      (tag (p class "cohort-privacy")
-        (pr "Weekly grouping only. No visitor IDs are stored. "
-            "Market and background API requests are excluded. ")
-        (tag (button type "button" class "cohort-optout") (pr "opt out"))))))
+    (cohort-table)
+    (cohort-privacy-controls)))
 
 (defopr cohort-visit
   (cohort-record arg!cohort arg!week arg!type)
