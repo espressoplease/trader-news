@@ -151,11 +151,18 @@ function onclick (ev) {
 
 document.addEventListener("click", onclick);
 
-/* Refresh chat only while its page is open and visible. */
+/* Refresh chat every 30 seconds while its page is open and visible. */
 (function () {
   var chat = $('trader-chat');
   var messages = $('trader-chat-messages');
   if (!chat || !messages) return;
+  var refreshEvery = 30000, refreshTimer, countdownTimer, remaining = refreshEvery;
+
+  function updateCountdown () {
+    var label = $('trader-chat-refresh');
+    if (!label) return;
+    label.textContent = document.hidden ? 'Refresh paused while this tab is hidden' : 'Next refresh in ' + Math.ceil(remaining / 1000) + 's';
+  }
 
   function renderMessage(msg) {
     if (msg.deleted) return null;
@@ -193,5 +200,23 @@ document.addEventListener("click", onclick);
     }).catch(function () {});
   }
 
-  window.setInterval(refreshChat, 60000);
+  function scheduleRefresh () {
+    window.clearTimeout(refreshTimer);
+    remaining = refreshEvery;
+    updateCountdown();
+    if (document.hidden) return;
+    refreshTimer = window.setTimeout(function () {
+      refreshChat();
+      scheduleRefresh();
+    }, refreshEvery);
+  }
+
+  countdownTimer = window.setInterval(function () {
+    if (!document.hidden) {
+      remaining = Math.max(0, remaining - 1000);
+      updateCountdown();
+    }
+  }, 1000);
+  document.addEventListener('visibilitychange', scheduleRefresh);
+  scheduleRefresh();
 })();

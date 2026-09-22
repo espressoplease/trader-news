@@ -363,6 +363,11 @@ and (max-width : 750px) {
 .trader-chat-heading, .trader-terms-note {
   color: #828282;
 }
+.trader-chat-refresh {
+  color: #9a8b7c;
+  font-size: 9pt;
+  white-space: nowrap;
+}
 .trader-chat-note, .trader-terms p {
   line-height: 1.45;
 }
