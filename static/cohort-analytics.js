@@ -59,13 +59,38 @@
     for (var i = 0; i < buttons.length; i++) {
       buttons[i].addEventListener('click', function () {
         try {
-          localStorage.setItem(STORAGE_KEY, 'opt-out');
-          this.textContent = 'opted out';
-          this.disabled = true;
+          var current = localStorage.getItem(STORAGE_KEY);
+          if (current === 'opt-out') {
+            localStorage.setItem(STORAGE_KEY, isoWeek(new Date()));
+          } else {
+            localStorage.setItem(STORAGE_KEY, 'opt-out');
+          }
+          renderOptOutState();
         } catch (error) {
-          this.textContent = 'storage unavailable';
+          var status = document.querySelector('.cohort-privacy-status');
+          if (status) status.textContent = 'Storage is unavailable in this browser, so visits remain unattributed.';
         }
       });
+    }
+    renderOptOutState();
+  }
+
+  function renderOptOutState() {
+    var status = document.querySelector('.cohort-privacy-status');
+    var buttons = document.querySelectorAll('.cohort-optout');
+    if (!status) return;
+
+    var stored = null;
+    try { stored = localStorage.getItem(STORAGE_KEY); } catch (error) {}
+    if (stored === 'opt-out') {
+      status.textContent = 'You are opted out. Your visits count as unattributed.';
+      for (var i = 0; i < buttons.length; i++) buttons[i].textContent = 'Opt back in';
+    } else if (/^\d{4}-W\d{2}$/.test(stored || '')) {
+      status.textContent = 'Your first-visit week is stored locally as ' + stored + '.';
+      for (var j = 0; j < buttons.length; j++) buttons[j].textContent = 'Opt out of cohort attribution';
+    } else {
+      status.textContent = 'No cohort is stored. Visits are unattributed.';
+      for (var k = 0; k < buttons.length; k++) buttons[k].textContent = 'Start cohort attribution';
     }
   }
 

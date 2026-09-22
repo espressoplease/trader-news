@@ -147,4 +147,4 @@
     (tag (h3) (pr "Community activity"))
     (gentag img src "/community-analytics.svg" width "720" height "160"
             alt "Daily Trader News unique visits over the last 30 days")
-    (tag (p) (pr "Daily unique visits, with returning visitors counted once every 5 minutes. Updated every 5 minutes. Collection starts with this feature."))))
+    (tag (p) (pr "Daily unique visits, with returning visitors counted once every 5 minutes. A keyed hash of the source address is used for deduplication; raw IP addresses are not stored. Updated every 5 minutes. Collection starts with this feature."))))

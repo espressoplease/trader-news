@@ -132,10 +132,22 @@
                       (pr (cohort-cell "" week))))))))))))
 
 (def cohort-privacy-controls ()
-  (tag (p class "cohort-privacy")
-    (pr "Weekly grouping only. No visitor IDs are stored. "
-        "Market and background API requests are excluded. ")
-    (tag (button type "button" class "cohort-optout") (pr "opt out"))))
+  (tag (section class "cohort-privacy-panel")
+    (tag (h3) (pr "Privacy-friendly tracking"))
+    (tag (p class "cohort-privacy")
+      (pr "Trader News stores only a first-visit week in your browser and sends "
+          "that week, the current week, and a coarse page type. No visitor ID, "
+          "IP address, account name, cookie ID, fingerprint, user-agent, or "
+          "referrer is stored in the cohort ledger. Market and background API "
+          "requests are excluded."))
+    (tag (p class "cohort-privacy")
+      (pr "You can opt out of cohort attribution at any time. Your future "
+          "page-load activity will be grouped as unattributed, and you can opt "
+          "back in later from this page."))
+    (tag (p class "cohort-privacy-status")
+      (pr "Checking your browser setting..."))
+    (tag (button type "button" class "cohort-optout")
+      (pr "Opt out of cohort attribution"))))
 
 (def cohort-analytics-page ()
   ; The cohort table is a normal section on the dedicated analytics page,

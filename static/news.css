@@ -472,7 +472,11 @@ and (max-width : 750px) {
 .cohort-table .cohort-hit { background:color-mix(in srgb, var(--market-tint,#eef8ef) 70%, transparent); color:var(--market-accent,#39824a); font-weight:bold; }
 .cohort-table .cohort-zero { color:#c8bfb6; }
 .cohort-table .cohort-unattributed th, .cohort-table .cohort-unattributed td { border-top:1px solid var(--market-border,#ead8c0); color:#9a8b7c; }
-.cohort-optout { background:transparent; border:0; color:#9a8b7c; cursor:pointer; font:inherit; padding:0; text-decoration:underline; }
+.cohort-privacy-panel { margin:20px 0 0; padding:11px 12px; background:var(--market-tint,#f7f2ed); border:1px solid var(--market-border,#ead8c0); }
+.cohort-privacy-panel h3 { color:#6f6257; font-size:11px; margin:0 0 5px; }
+.cohort-privacy-panel .cohort-privacy { margin:5px 0; }
+.cohort-privacy-status { color:var(--market-accent,#6f8c73); font-size:9px; line-height:1.35; margin:8px 0 4px; }
+.cohort-optout { background:transparent; border:0; color:#6f6257; cursor:pointer; font:inherit; font-size:9px; padding:0; text-decoration:underline; }
 .cohort-optout:hover, .cohort-optout:focus { color:#222; }
 
 @media only screen and (max-width:750px) {
