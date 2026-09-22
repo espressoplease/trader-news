@@ -156,6 +156,7 @@ document.addEventListener("click", onclick);
   var chat = $('trader-chat');
   var messages = $('trader-chat-messages');
   if (!chat || !messages) return;
+  var older = $('trader-chat-load-older');
   var refreshEvery = 30000, refreshTimer, countdownTimer, remaining = refreshEvery;
 
   function updateCountdown () {
@@ -164,7 +165,7 @@ document.addEventListener("click", onclick);
     label.textContent = document.hidden ? 'Refresh paused while this tab is hidden' : 'Next refresh in ' + Math.ceil(remaining / 1000) + 's';
   }
 
-  function renderMessage(msg) {
+  function renderMessage(msg, live) {
     if (msg.deleted) return null;
     var row = document.createElement('div');
     row.className = 'trader-chat-message';
@@ -173,7 +174,7 @@ document.addEventListener("click", onclick);
     var user = document.createElement('span');
     user.textContent = msg.user + (msg.referralStars || '');
     meta.appendChild(user);
-    meta.appendChild(document.createTextNode(' · live update'));
+    if (live) meta.appendChild(document.createTextNode(' · live update'));
     var body = document.createElement('div');
     body.className = 'trader-chat-body';
     body.textContent = msg.text;
@@ -194,11 +195,41 @@ document.addEventListener("click", onclick);
         var id = parseInt(msg.id, 10);
         var last = parseInt(attr(chat, 'data-last-id') || '0', 10);
         if (id > last) chat.setAttribute('data-last-id', String(id));
-        var row = renderMessage(msg);
+        var row = renderMessage(msg, true);
         if (row) messages.appendChild(row);
       }, data.messages);
     }).catch(function () {});
   }
+
+  function loadOlderMessages () {
+    if (!older || older.disabled) return;
+    var before = attr(chat, 'data-oldest-id') || '0';
+    older.disabled = true;
+    older.textContent = 'loading older messages…';
+    fetch('/chat.json?before=' + encodeURIComponent(before), {
+      credentials: 'same-origin',
+      headers: {'Accept': 'application/json'}
+    }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+      if (!data || !data.messages || !data.messages.length) {
+        older.textContent = 'no older messages';
+        return;
+      }
+      var fragment = document.createDocumentFragment();
+      aeach(function (msg) {
+        var row = renderMessage(msg, false);
+        if (row) fragment.appendChild(row);
+      }, data.messages);
+      messages.insertBefore(fragment, messages.firstChild);
+      chat.setAttribute('data-oldest-id', String(data.messages[0].id));
+      older.disabled = false;
+      older.textContent = 'load older messages';
+    }).catch(function () {
+      older.disabled = false;
+      older.textContent = 'load older messages';
+    });
+  }
+
+  if (older) older.addEventListener('click', loadOlderMessages);
 
   function scheduleRefresh () {
     window.clearTimeout(refreshTimer);

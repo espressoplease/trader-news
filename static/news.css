@@ -376,6 +376,26 @@ and (max-width : 750px) {
   font-size: 9pt;
   white-space: nowrap;
 }
+.trader-chat-history-controls {
+  margin: 12px 0 -8px;
+}
+.trader-chat-history-controls button {
+  padding: 4px 8px;
+  border: 1px solid #d7c7ad;
+  background: #f6f6ef;
+  color: #828282;
+  font: 8pt Verdana, Geneva, sans-serif;
+  cursor: pointer;
+}
+.trader-chat-history-controls button:hover,
+.trader-chat-history-controls button:focus {
+  border-color: #9a8b7c;
+  color: #333;
+}
+.trader-chat-history-controls button:disabled {
+  cursor: default;
+  opacity: .65;
+}
 .trader-chat-note, .trader-terms p {
   line-height: 1.45;
 }

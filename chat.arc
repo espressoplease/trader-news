@@ -120,32 +120,49 @@
   (let ids (sort > (keys chat-messages*))
     (map chat-message (firstn 100 ids))))
 
+(def chat-json-messages (since-id before-id)
+  ; Incremental polling must not use the recent-100 window. A quiet tab can
+  ; be away long enough for more than 100 messages to arrive, and all of them
+  ; should be recoverable from the persisted table.
+  (let messages
+       (keep (fn (msg)
+               (and (no msg!deleted)
+                    (if before-id
+                        (< msg!id before-id)
+                        (> msg!id since-id))))
+             (vals chat-messages*))
+    (let sorted (sort (compare (if before-id < >) !id) messages)
+      (if before-id (firstn 100 sorted) sorted))))
+
 (def chat-json-message (msg)
   (obj id msg!id user msg!user text msg!text created msg!created
        deleted msg!deleted flags (len msg!flags) referralStars (referral-stars msg!user)))
 
 (def chat-json-page ()
   (let since-id (or (safe-posint arg!since) 0)
+       before-id (safe-posint arg!before)
     (responding type-header*!json (prn)
       (prjson
         (obj ok t messages
-             (map chat-json-message
-                  (keep (fn (msg)
-                          (and (> msg!id since-id) (no msg!deleted)))
-                        (chat-recent-messages))))))))
+             (map chat-json-message (chat-json-messages since-id before-id)))))))
 
 (def chat-page ()
   (shortpage nil "chat" "Trader News chat" "chat"
-    (tag (div id "trader-chat" class "trader-chat"
-              data-last-id (string (chat-last-id)))
+    (let recent (chat-recent-messages)
+      (tag (div id "trader-chat" class "trader-chat"
+                data-last-id (string (chat-last-id))
+                data-oldest-id (string (if recent (last recent)!id 0)))
       (tag (div class "trader-chat-heading")
         (tag (h1) (pr "Trader News chat"))
         (tag (p class "trader-chat-note")
           (pr "Logged-in users can join the conversation. Be civil, stay on topic, and flag abuse. New messages refresh every 30 seconds while this tab is visible. ")
           (tag (span id "trader-chat-refresh" class "trader-chat-refresh")
             (pr "Next refresh in 30s"))))
+      (tag (div class "trader-chat-history-controls")
+        (tag (button id "trader-chat-load-older" type "button")
+          (pr "load older messages")))
       (tag (div id "trader-chat-messages" class "trader-chat-messages")
-        (each msg (rev (chat-recent-messages))
+        (each msg (rev recent)
           (chat-message-row msg)))
       (when (chat-blocked? (me))
         (tag (p class "trader-chat-blocked")
@@ -158,7 +175,7 @@
               (pr (or arg!text "")))
             (tag (div class "trader-chat-compose-foot")
               (pr "No investment advice or personal data, please. ")
-              (submit "send"))))))))
+              (submit "send")))))))))
 
 (def chat-admin-page ()
   (if (no (is (chat-key (me)) "failmore"))
