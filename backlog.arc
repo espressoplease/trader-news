@@ -112,7 +112,9 @@
    market-backlog-last-file* (+ newsdir* "backlog-last-published")
    market-backlog-author* "marketbot"
    market-backlog-initial-count* 20
-   market-backlog-drip-secs* (* 40 min*))
+   market-backlog-drip-secs* (* 40 min*)
+   frontpage-new-story-grace-secs* (* 20 min*)
+   frontpage-new-story-slots* 2)
 
 (or= market-backlog-lock* (make-lock 9 "market-backlog"))
 
@@ -219,19 +221,37 @@
 (def latest-backlog-stories (n)
   (firstn n (sort (compare > !id) (keep shown&backlog-story stories*))))
 
+(def frontpage-new-stories (n)
+  ; Give a couple of genuine community posts a short discovery window. This
+  ; only catches fresh 0/1-point stories, leaves curated backlog stories to
+  ; their existing fallback, and never changes the stored score.
+  (firstn n
+         (sort (compare > !time)
+               (keep (fn (item)
+                       (and (metastory item)
+                            (shown item)
+                            (~backlog-story item)
+                            (>= (realscore item) 0)
+                            (<= (realscore item) 1)
+                            (< (item-age item)
+                               (/ frontpage-new-story-grace-secs* min*))))
+                     stories*))))
+
 ; The normal score threshold remains honest. When the community has not yet
 ; produced enough voted stories, recent curated stories fill the remaining
 ; front-page slots without changing their score or pretending they have votes.
 (def home-stories ((o n maxend*))
   (let want (or n perpage*)
     (let ranked (topstories want)
-    (if (>= (len ranked) want)
-        ranked
-        (let ids (memtable (map !id ranked))
-          (+ ranked
-             (firstn (- want (len ranked))
-                     (rem (fn (item) (ids item!id))
-                          (latest-backlog-stories want)))))))))
+      (let ranked-ids (memtable (map !id ranked))
+        (let fresh (rem (fn (item) (ranked-ids item!id))
+                        (frontpage-new-stories frontpage-new-story-slots*))
+          (let base (firstn (max 0 (- want (len fresh))) ranked)
+            (let ids (memtable (map !id (+ base fresh)))
+              (+ base fresh
+                 (firstn (max 0 (- want (+ (len base) (len fresh))))
+                         (rem (fn (item) (ids item!id))
+                              (latest-backlog-stories want)))))))))))
 
 (def latest-home-stories ()
   (firstn 5 (newstories)))
