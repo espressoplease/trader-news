@@ -451,3 +451,26 @@ and (max-width : 750px) {
 .community-analytics h3 { font-size:12px; margin:0 0 5px; }
 .community-analytics img { width:100%; height:auto; display:block; }
 .community-analytics p { color:#82735f; font-size:10px; }
+
+/* SmallDocs-inspired retention table, adapted to Trader News's compact HN
+   footer and market-regime colour variables. */
+.cohort-analytics { border-top:1px solid var(--market-border,#ead8c0); margin:12px auto 0; max-width:720px; padding:8px 10px 0; text-align:left; }
+.cohort-analytics summary { color:var(--market-accent,#6f8c73); cursor:pointer; font-size:10px; font-weight:bold; }
+.cohort-analytics summary:hover, .cohort-analytics summary:focus { color:#222; }
+.cohort-note, .cohort-privacy, .cohort-empty { color:#82735f; font-size:9px; line-height:1.35; margin:7px 0 5px; }
+.cohort-table-scroll { overflow-x:auto; padding-bottom:2px; }
+.cohort-table { border-collapse:collapse; color:#5f5f5f; font-family:Verdana,Geneva,sans-serif; font-size:8px; min-width:520px; width:100%; }
+.cohort-table th, .cohort-table td { border-bottom:1px solid #eee6dc; padding:3px 5px; text-align:right; white-space:nowrap; }
+.cohort-table thead th { background:var(--market-tint,#f7f2ed); color:#9a8b7c; font-size:7px; font-weight:normal; text-transform:uppercase; }
+.cohort-table .cohort-label { color:#6f6257; text-align:left; }
+.cohort-table .cohort-size { color:#7d654e; font-weight:bold; }
+.cohort-table .cohort-hit { background:color-mix(in srgb, var(--market-tint,#eef8ef) 70%, transparent); color:var(--market-accent,#39824a); font-weight:bold; }
+.cohort-table .cohort-zero { color:#c8bfb6; }
+.cohort-table .cohort-unattributed th, .cohort-table .cohort-unattributed td { border-top:1px solid var(--market-border,#ead8c0); color:#9a8b7c; }
+.cohort-optout { background:transparent; border:0; color:#9a8b7c; cursor:pointer; font:inherit; padding:0; text-decoration:underline; }
+.cohort-optout:hover, .cohort-optout:focus { color:#222; }
+
+@media only screen and (max-width:750px) {
+  .cohort-analytics { margin-left:5px; margin-right:5px; padding-left:5px; padding-right:5px; }
+  .cohort-table { min-width:490px; }
+}

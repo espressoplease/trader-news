@@ -795,7 +795,8 @@ Connection: close"))
 
 ; Background Threads
 
-(or= bgthreads* (table) pending-bgthreads* nil bgticks* (table))
+(or= bgthreads* (table) pending-bgthreads* nil bgticks* (table)
+     bgstop-hooks* (table))
 
 ; Heartbeat, so a thread that is merely between passes can be told from
 ; one wedged inside its body.  A live thread reports 'run while f is
@@ -838,7 +839,15 @@ Connection: close"))
   (each id (keys bgthreads*)
     (stop-thread (bgthreads* id))
     (wipe (bgthreads* id))
-    (wipe (bgticks* id))))
+    (wipe (bgticks* id)))
+  ; Flush registered application buffers after stopping their timers. Hooks
+  ; are intentionally generic so the server remains independent of features.
+  (each (id f) bgstop-hooks*
+    (on-err (fn (c) (prn "background shutdown hook " id " failed: " c))
+      (fn () (f)))))
+
+(def register-bgstop-hook (id f)
+  (= (bgstop-hooks* id) f))
 
 (def restart-bgthreads ()
   (stop-bgthreads)
@@ -904,4 +913,3 @@ Connection: close"))
 ; Idea: make form fields that know their value type because of
 ; gensymed names, and so the receiving fn gets args that are not
 ; strings but parsed values.
-

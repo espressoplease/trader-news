@@ -792,6 +792,7 @@
        (tag (script src (static-src "market-companies.js")))
        (tag (script src (static-src "hn.js")))
        (tag (script src (static-src "market-explorer.js")))
+       (tag (script src (static-src "cohort-analytics.js")))
        (tag title (presc ,title)))
      (tag body 
        (center
@@ -832,6 +833,7 @@
 
 (def footer ()
   (referral-analytics)
+  (cohort-analytics)
   (when (me) (referral-banner))
   (spanclass yclinks
     (w/bars
@@ -1174,6 +1176,9 @@
 (load "market-feed.arc")
 (load "chat.arc")
 (load "referrals.arc")
+(load "cohort-analytics.arc")
+(defbg cohort-analytics-flush 900
+  (cohort-flush))
 
 
 ; News Admin
