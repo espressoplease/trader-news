@@ -30,6 +30,7 @@
 (def reset-referrals ()
   (= referral-counts* (table)
      referral-last* (table)
+     referral-view-last* (table)
      referral-owners* (table)
      referral-days* (table))
   (when (file-exists referral-ledger*) (rmfile referral-ledger*)))
@@ -63,11 +64,19 @@
 (referral-test self-referral (no (referral-record 20003 "198.51.100.5" 'alice 'alice)))
 (referral-test self-referral-no-count (is (referral-counts* 'alice) 2))
 
+; Analytics does not count a repeated background request as a new visit.
+(reset-referrals)
+(referral-record 25000 "198.51.100.9" nil nil)
+(referral-record 25001 "198.51.100.9" nil nil)
+(referral-test hourly-pageview-once
+               (is (referral-days* (referral-day 25000)) 1))
+
 ; Replay derives exactly the same state from the append-only ledger.
 (reset-referrals)
 (referral-record 30000 "198.51.100.6" 'alice nil)
 (referral-record 30001 "198.51.100.7" 'alice nil)
-(= referral-counts* (table) referral-last* (table) referral-owners* (table) referral-days* (table))
+(= referral-counts* (table) referral-last* (table) referral-view-last* (table)
+   referral-owners* (table) referral-days* (table))
 (w/infile stream referral-ledger*
   (whilet event (errsafe (read stream))
     (referral-apply event)))

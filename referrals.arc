@@ -8,6 +8,7 @@
 (or= referral-lock* (make-lock 24 "referrals")
      referral-counts* (table)
      referral-last* (table)
+     referral-view-last* (table)
      referral-owners* (table)
      referral-days* (table))
 
@@ -34,7 +35,14 @@
 
 (def referral-apply (event)
   (let (at day fingerprint ref owner) event
-    (++ (referral-days* day 0))
+    ; Count analytics visits at most once per hour per keyed visitor. The old
+    ; implementation counted every HTML request, so background refreshes
+    ; could look like thousands of human views.
+    (when (or (no fingerprint)
+              (no (referral-view-last* fingerprint))
+              (>= (- at (referral-view-last* fingerprint 0)) 3600))
+      (when fingerprint (= (referral-view-last* fingerprint) at))
+      (++ (referral-days* day 0)))
     (when fingerprint
       (when ref
         (= (referral-last* fingerprint) at)
@@ -67,7 +75,7 @@
     (let fingerprint (and address (referral-fingerprint address))
       (let credited (and fingerprint (referral-credit? at fingerprint ref user) ref)
         (let event (list at (referral-day at)
-                          (and (or credited user) fingerprint) credited user)
+                          fingerprint credited user)
           ; Persist first. A write failure must not grant unpersisted rewards.
           (w/appendfile stream referral-ledger* (write event stream) (disp #\newline stream))
           (referral-apply event)
@@ -115,13 +123,13 @@
             total (apply + values))
       (tostring
         (pr "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 720 160\" role=\"img\" aria-labelledby=\"title desc\"><title id=\"title\">Trader News daily page views</title><desc id=\"desc\">"
-            total " page views in the last 30 days, including repeat visits. Peak daily views: " peak
+            total " unique visits in the last 30 days. Peak daily visits: " peak
             ".</desc><rect width=\"720\" height=\"160\" fill=\"#f6f6ef\"/><g fill=\"#82735f\" font-family=\"Verdana,sans-serif\" font-size=\"11\"><text x=\"10\" y=\"16\">"
-            total " page views over 30 days</text><text x=\"10\" y=\"151\">29 days ago</text><text x=\"675\" y=\"151\">Today</text></g>")
+            total " unique visits over 30 days</text><text x=\"10\" y=\"151\">29 days ago</text><text x=\"675\" y=\"151\">Today</text></g>")
         (for i 0 29
           (withs (value (values i) h (* 100.0 (/ value peak)) x (+ 10 (* i 23)))
             (pr "<rect x=\"" x "\" y=\"" (- 130 h) "\" width=\"18\" height=\"" h "\" fill=\"#718d73\"><title>"
-                (- 29 i) " days ago: " value " views</title></rect>")))
+                (- 29 i) " days ago: " value " visits</title></rect>")))
         (pr "</svg>")))))
 
 (defcache referral-cached-chart 300 (referral-chart-svg))
@@ -137,5 +145,5 @@
   (tag (section class "community-analytics")
     (tag (h3) (pr "Community activity"))
     (gentag img src "/community-analytics.svg" width "720" height "160"
-            alt "Daily Trader News page views over the last 30 days, including repeat visits")
-    (tag (p) (pr "Daily page views, including returning visitors. Updated every 5 minutes. Collection starts with this feature."))))
+            alt "Daily Trader News unique visits over the last 30 days")
+    (tag (p) (pr "Daily unique visits, with returning visitors counted once per hour. Updated every 5 minutes. Collection starts with this feature."))))
