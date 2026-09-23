@@ -851,7 +851,12 @@
       (link "Terms"       "terms")
       (link "Security"    "security.html")
       (link "DMCA"        "dmca.html")
-      (link "Contact"     "mailto:@site-email*")))
+      (link "Contact"     "mailto:@site-email*")
+      (tag (a href hn-url* target "_blank" rel "noopener noreferrer")
+        (pr "Inspired by Hacker News"))
+      (tag (a href "https://github.com/shawwn/sharc"
+              target "_blank" rel "noopener noreferrer")
+        (pr "Fork of Sharc"))))
   (br2)
   (tag (form method "get" action "//hn.algolia.com/")
     (pr "Search: ")
