@@ -296,8 +296,17 @@
 (defplace user-key (k (o u '(me)))
   `(mem ,k (uvar ,u keys)))
 
+(def legacy-profile-user (uid)
+  ; Older deployments can retain profile files after the reverse UID index was
+  ; rewritten. Resolve those trusted records so one orphaned author cannot
+  ; make a public listing render as an empty response.
+  (and (exact uid)
+       (aif (errsafe (temload 'profile (prof-path uid)))
+            it!id)))
+
 (def by (i)
   (or (uid->user* i!by)
+      (legacy-profile-user i!by)
       ; Older curated backlog stories were written with the original
       ; marketbot UID. Resolve those records by their durable source tag so
       ; a UID change cannot blank the whole homepage.
