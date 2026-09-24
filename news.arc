@@ -291,7 +291,11 @@
   (keys votes* f))
 
 (def user-key (k (t u me))
-  (and u (mem k (uvar u keys))))
+  ; Legacy stories can outlive their username-to-UID mapping.  In that case
+  ; profile returns nil, and attempting to read its keys used to abort the
+  ; whole page render.  Treat missing profile metadata as an ordinary absent
+  ; user flag so one orphaned author cannot blank a listing.
+  (and u (profile u) (mem k (uvar u keys))))
 
 (defplace user-key (k (o u '(me)))
   `(mem ,k (uvar ,u keys)))
