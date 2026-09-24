@@ -115,8 +115,10 @@ a:visited { color:#828282; text-decoration:none; }
 .market-constituent-ident { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .market-constituent-ident::first-line { color:inherit; }
 .market-constituent-price, .market-constituent-move, .market-constituent-cap, .market-constituent-pe, .market-constituent-yield { font-family:monospace; text-align:right; }
-.market-constituent > .market-constituent-move { color:var(--market-row-accent,var(--market-accent)); }
-.market-constituent > .market-constituent-move.is-negative { color:var(--market-row-negative,#b14b3f); }
+.market-constituent > .market-constituent-move { color:#8b7b6c; }
+.market-constituent > .market-constituent-move.is-positive { color:#39824a; }
+.market-constituent > .market-constituent-move.is-negative { color:#b14b3f; }
+.market-constituent > .market-constituent-move.is-missing { color:#8b7b6c; }
 .market-constituent > .market-constituent-day { color:var(--market-day-accent,#39824a); }
 .market-constituent > .market-constituent-day.is-negative { color:var(--market-day-negative,#b14b3f); }
 .market-constituent-foot { color:#a69482; font-size:8px; gap:6px; margin-top:4px; }

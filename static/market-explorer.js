@@ -78,7 +78,16 @@
       links.appendChild(link);
     });
   }
-  function changeClass(node, value) { if (!node) return; node.className = node.className.replace(/\bis-negative\b/g, ''); if (finite(value) && value < 0) node.className += ' is-negative'; }
+  function changeClass(node, value) {
+    if (!node) return;
+    node.className = node.className
+      .replace(/\bis-negative\b/g, '')
+      .replace(/\bis-positive\b/g, '')
+      .replace(/\bis-missing\b/g, '');
+    if (!finite(value)) node.className += ' is-missing';
+    else if (value < 0) node.className += ' is-negative';
+    else if (value > 0) node.className += ' is-positive';
+  }
   function age(seconds) { if (!finite(seconds)) return 'unknown'; seconds = Math.max(0, Math.round(seconds)); if (seconds < 60) return seconds + 's ago'; if (seconds < 3600) return Math.round(seconds / 60) + 'm ago'; if (seconds < 86400) return Math.round(seconds / 3600) + 'h ago'; return Math.round(seconds / 86400) + 'd ago'; }
   function timestamp(seconds) { return finite(seconds) ? new Date(seconds * 1000).toLocaleString() : 'unknown'; }
   function statusLabel(record) { if (!record) return 'warming'; if (record.status === 'warming') return 'warming'; if (record.status === 'unavailable') return 'unavailable'; if (record.status === 'error') return 'unavailable'; if (record.marketState === 'CLOSED') return 'closed'; return record.status || 'cached'; }
