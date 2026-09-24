@@ -302,11 +302,13 @@
 
 (def legacy-profile-user (uid)
   ; Older deployments can retain profile files after the reverse UID index was
-  ; rewritten. Resolve those trusted records so one orphaned author cannot
-  ; make a public listing render as an empty response.
+  ; rewritten. Resolve and cache those trusted records so every profile-field
+  ; read sees the same data, and one orphaned author cannot make a public
+  ; listing render as an empty response.
   (and (exact uid)
        (aif (errsafe (temload 'profile (prof-path uid)))
-            it!id)))
+            (do (= (profs* it!id) it)
+                it!id))))
 
 (def by (i)
   (or (uid->user* i!by)
