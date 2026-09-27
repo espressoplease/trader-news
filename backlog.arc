@@ -113,8 +113,11 @@
    market-backlog-author* "marketbot"
    market-backlog-initial-count* 20
    market-backlog-drip-secs* (* 40 min*)
-   frontpage-new-story-grace-secs* (* 20 min*)
-   frontpage-new-story-slots* 2)
+   ; Give genuinely new links a meaningful discovery window. The ranked
+   ; list still supplies the remaining slots, so voted stories retain their
+   ; route to the front page while zero-vote links are not invisible.
+   frontpage-new-story-grace-secs* (* 6 hour*)
+   frontpage-new-story-slots* 12)
 
 (or= market-backlog-lock* (make-lock 9 "market-backlog"))
 
@@ -219,27 +222,30 @@
 (def backlog-story (item) (mem 'backlog item!keys))
 
 (def latest-backlog-stories (n)
-  (firstn n (sort (compare > !id) (keep shown&backlog-story stories*))))
+  ; Backlog stories use synthetic negative IDs, so ID order is not publish
+  ; order. Use the actual publication timestamp when filling the homepage.
+  (firstn n (sort (compare > !time) (keep shown&backlog-story stories*))))
 
 (def frontpage-new-stories (n)
-  ; Give a couple of genuine community posts a short discovery window. This
-  ; only catches fresh 0/1-point stories, leaves curated backlog stories to
-  ; their existing fallback, and never changes the stored score.
+  ; Give fresh 0/1-point community and marketbot stories a real discovery
+  ; window, without changing their stored score.
   (firstn n
          (sort (compare > !time)
                (keep (fn (item)
                        (and (metastory item)
                             (shown item)
-                            (~backlog-story item)
+                            (or (~backlog-story item)
+                                (is item!ip "market-backlog"))
                             (>= (realscore item) 0)
                             (<= (realscore item) 1)
                             (< (item-age item)
                                (/ frontpage-new-story-grace-secs* min*))))
                      stories*))))
 
-; The normal score threshold remains honest. When the community has not yet
-; produced enough voted stories, recent curated stories fill the remaining
-; front-page slots without changing their score or pretending they have votes.
+; The normal score threshold remains honest. Fresh stories get a meaningful
+; discovery allocation before the ranked list fills the remaining slots. This
+; keeps the front page moving while voted stories still control the balance of
+; the page and are never given fabricated points.
 (def home-stories ((o n maxend*))
   (let want (or n perpage*)
     (let ranked (topstories want)
@@ -248,7 +254,7 @@
                         (frontpage-new-stories frontpage-new-story-slots*))
           (let base (firstn (max 0 (- want (len fresh))) ranked)
             (let ids (memtable (map !id (+ base fresh)))
-              (+ base fresh
+              (+ fresh base
                  (firstn (max 0 (- want (+ (len base) (len fresh))))
                          (rem (fn (item) (ids item!id))
                               (latest-backlog-stories want)))))))))))
