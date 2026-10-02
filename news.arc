@@ -806,6 +806,7 @@
        (tag (script src (static-src "market-data.js")))
        (tag (script src (static-src "company-profiles.js")))
        (tag (script src (static-src "market-companies.js")))
+       (tag (script src (static-src "company-colors.js")))
        (tag (script src (static-src "hn.js")))
        (tag (script src (static-src "market-explorer.js")))
        (tag (script src (static-src "cohort-analytics.js")))

@@ -36,7 +36,16 @@
     var panel = el('company-articles'); if (!panel) return;
     panel.innerHTML = '';
     var head = document.createElement('div'), title = document.createElement('h2'), reset = document.createElement('button');
-    head.className = 'company-articles-head'; title.textContent = 'News for ' + (entity.companyName || entity.name) + ' (' + entity.symbol + ')';
+    var info = window.FINANCE_COMPANY_INFO ? window.FINANCE_COMPANY_INFO(entity.symbol, entity.companyName || entity.name, entity.marketName) : null;
+    var iconBox = document.createElement('span'), headingText = document.createElement('span');
+    head.className = 'company-articles-head'; iconBox.className = 'company-articles-icon'; iconBox.setAttribute('aria-hidden', 'true');
+    iconBox.textContent = (entity.companyName || entity.name || entity.symbol).charAt(0).toUpperCase();
+    if (info && info.iconUrl) {
+      var icon = document.createElement('img'); icon.src = info.iconUrl; icon.alt = ''; icon.width = 28; icon.height = 28;
+      icon.referrerPolicy = 'no-referrer'; icon.onerror = function () { this.style.display = 'none'; }; iconBox.appendChild(icon);
+    }
+    headingText.textContent = 'News for ' + (entity.companyName || entity.name) + ' (' + entity.symbol + ')';
+    title.appendChild(iconBox); title.appendChild(headingText);
     reset.type = 'button'; reset.textContent = 'All news'; reset.addEventListener('click', function () { if (state.market) loadMarket(state.market); });
     head.appendChild(title); head.appendChild(reset); panel.appendChild(head);
     var entries = payload && Array.isArray(payload.articles) ? payload.articles : [];
@@ -251,6 +260,8 @@
       var node = document.createElement('div'), ident = document.createElement('span'), price = document.createElement('span'), day = document.createElement('span'), period = document.createElement('span'), cap = document.createElement('span'), pe = document.createElement('span'), yieldValue = document.createElement('span'), badge = document.createElement('span');
       var info = window.FINANCE_COMPANY_INFO ? window.FINANCE_COMPANY_INFO(row.ticker, row.name, market.name) : null;
       node.className = 'market-constituent'; node.tabIndex = 0; node.setAttribute('role', 'button'); node.title = info ? info.description + '\nClick for chart, detail, and research links.' : badgeTitle(row.quote); ident.className = 'market-constituent-ident'; price.className = 'market-constituent-price'; day.className = 'market-constituent-day market-constituent-move'; period.className = 'market-constituent-period market-constituent-move'; cap.className = 'market-constituent-cap'; pe.className = 'market-constituent-pe'; yieldValue.className = 'market-constituent-yield'; badge.className = 'market-row-badge';
+      node.dataset.symbol = row.ticker;
+      node.classList.toggle('is-selected', state.entity && state.entity.type === 'company' && state.entity.symbol === row.ticker);
       var iconBox = document.createElement('span'); iconBox.className = 'market-company-icon'; iconBox.setAttribute('aria-hidden', 'true'); iconBox.textContent = (row.name || row.ticker).charAt(0).toUpperCase();
       if (info && info.iconUrl) { var icon = document.createElement('img'); icon.src = info.iconUrl; icon.alt = ''; icon.width = 20; icon.height = 20; icon.loading = 'lazy'; icon.referrerPolicy = 'no-referrer'; icon.onerror = function () { this.style.display = 'none'; }; iconBox.appendChild(icon); }
       ident.appendChild(iconBox);
@@ -268,6 +279,16 @@
   }
   function selectEntity(entity) {
     state.entity = entity; saveView(); state.token++; var token = state.token; el('market-detail').className = 'market-detail';
+    var layout = document.querySelector('.trader-layout');
+    if (layout) {
+      var color = entity.type === 'company' && window.FINANCE_COMPANY_COLORS && window.FINANCE_COMPANY_COLORS[entity.symbol];
+      layout.classList.toggle('has-company-theme', !!color);
+      if (color) layout.style.setProperty('--company-accent', color);
+      else layout.style.removeProperty('--company-accent');
+    }
+    document.querySelectorAll('.market-constituent').forEach(function (row) {
+      row.classList.toggle('is-selected', entity.type === 'company' && row.dataset.symbol === entity.symbol);
+    });
     if (entity.type === 'company') showCompanyArticles(entity); else showGeneralArticles();
     var companyPanel = el('market-company-detail'); document.querySelector('.market-detail-grid').classList.toggle('company-selected', entity.type === 'company');
     if (companyPanel) {
