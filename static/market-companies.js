@@ -75,8 +75,15 @@
   }
 
   function description(symbol, name, marketName) {
+    var profile = window.FINANCE_COMPANY_PROFILES && window.FINANCE_COMPANY_PROFILES[symbol];
+    if (profile && profile.description) return profile.description;
     var sector = inferSector(symbol, name);
     return String(name || symbol) + ' operates in ' + sector + '.';
+  }
+
+  function companyWebsite(symbol) {
+    var profile = window.FINANCE_COMPANY_PROFILES && window.FINANCE_COMPANY_PROFILES[symbol];
+    return profile && /^https?:\/\//.test(profile.website || '') ? profile.website : null;
   }
 
   function irDestination(symbol, name) {
@@ -86,8 +93,13 @@
 
   window.FINANCE_COMPANY_INFO = function (symbol, name, marketName) {
     var ir = irDestination(symbol, name);
+    var website = companyWebsite(symbol);
+    var profile = window.FINANCE_COMPANY_PROFILES && window.FINANCE_COMPANY_PROFILES[symbol];
     return {
       description:description(symbol, name, marketName),
+      websiteUrl:website,
+      iconUrl:website ? 'https://www.google.com/s2/favicons?sz=32&domain_url=' + encodeURIComponent(website) : null,
+      profileSourceUrl:profile && profile.sourceUrl || null,
       yahooUrl:utm('https://finance.yahoo.com/quote/' + encodeURIComponent(yahooSymbol(symbol)), 'company_quote'),
       irUrl:utm(ir.url, 'investor_relations'),
       yahooClickUrl:clickUrl(symbol, 'company_quote'),
