@@ -28,12 +28,16 @@ Symbols use the exact market-data ticker, including exchange suffixes such as
 normalizes symbol case and topic tag case. Re-importing an existing canonical
 URL can add symbols and tags without adding another story. Tag associations
 are stored under the server's `arc/news/article-tags` runtime data file, and
-newly published stories also carry those fields.
+newly published stories also carry those fields. Articles with a company symbol
+appear on that company's news page as soon as they are imported, without
+entering the general feed queue. General articles without a company symbol
+continue through the queue at one story every 40 minutes.
 
 The public, read-only endpoint `/articles.json` accepts `symbol`, `q`, and
 `limit` (maximum 100). It returns `articles`, `count`, `total`, `symbolcounts`,
-and `tagcounts`. Counts include queued and published curated links. Articles
-include their status so a research agent can avoid finding the same URL again.
+and `tagcounts`. Counts include posted company articles and queued or published
+general links. Articles include their status so a research agent can avoid
+finding the same URL again.
 The endpoint does not add articles. The existing controlled importer remains
 the write path.
 

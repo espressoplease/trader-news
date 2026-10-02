@@ -135,14 +135,20 @@
   (or (car (market-article-tags* (backlog-key entry))) nil))
 (def backlog-tags (entry)
   (or (cadr (market-article-tags* (backlog-key entry))) nil))
+(def backlog-company-posted-at (entry)
+  (let info (market-article-tags* (backlog-key entry))
+    (and info (> (len info) 2) (info 2))))
 
 (def backlog-save-tags (url symbols tags)
   (when (or symbols tags)
     (let key (canonical-url url)
       (let old (market-article-tags* key)
-        (= (market-article-tags* key)
-           (list (dedup (+ (or (car old) nil) (or symbols nil)))
-                 (dedup (+ (or (cadr old) nil) (or tags nil)))))
+        (let merged-symbols (dedup (+ (or (car old) nil) (or symbols nil)))
+          (= (market-article-tags* key)
+             (list merged-symbols
+                   (dedup (+ (or (cadr old) nil) (or tags nil)))
+                   (or (and old (> (len old) 2) (old 2))
+                       (and merged-symbols (seconds))))))
         (todisk market-article-tags*)
         (whenlet id (market-backlog-published* key)
           (whenlet story (item id)
@@ -157,6 +163,15 @@
     (create-acct market-backlog-author* (rand-string 64)))
   (unless (profile market-backlog-author*)
     (init-user market-backlog-author*))
+  ; Release older company links into company news on first startup.
+  (let changed nil
+    (each entry market-backlog*
+      (when (and (backlog-symbols entry) (no (backlog-company-posted-at entry)))
+        (let key (backlog-key entry)
+          (= (market-article-tags* key)
+             (list (backlog-symbols entry) (backlog-tags entry) (seconds)))
+          (= changed t))))
+    (when changed (todisk market-article-tags*)))
   market-backlog*)
 
 (def backlog-known-url (url)
@@ -164,8 +179,8 @@
     (or (market-backlog-published* key)
         (some (fn (entry) (is (backlog-key entry) key)) market-backlog*))))
 
-; This is the intended automation entrypoint for a future agent or a REPL.
-; It writes immediately, and a duplicate URL is ignored rather than queued twice.
+; Company links appear in company news immediately. General links use the
+; paced backlog. A duplicate URL is never stored twice.
 (def backlog-add (title url (o source "") (o symbols nil) (o tags nil))
   (unless (and (~blank title) (valid-url url))
     (err "Backlog entries need a title and a valid URL."))
@@ -177,11 +192,12 @@
     market-backlog*))
 
 (def backlog-pending ()
-  (rem (fn (entry) (market-backlog-published* (backlog-key entry)))
+  (rem (fn (entry) (or (market-backlog-published* (backlog-key entry))
+                       (backlog-symbols entry)))
        market-backlog*))
 
 ; Public, read-only coverage for the site and research agents. Counts describe
-; curated backlog entries, including links waiting to be published.
+; curated general links in the queue and immediately posted company links.
 (def backlog-article-result (entry)
   (let id (market-backlog-published* (backlog-key entry))
     (let story (and id (item id))
@@ -192,8 +208,8 @@
              source (backlog-source entry)
              symbols (or (backlog-symbols entry) 'empty)
              tags (or (backlog-tags entry) 'empty)
-             status (if id "published" "queued")
-             time (and story story!time))))))
+             status (if (or id (backlog-company-posted-at entry)) "published" "queued")
+             time (or (and story story!time) (backlog-company-posted-at entry)))))))
 
 (def backlog-article-matches (entry symbol query)
   (and (or (no symbol) (mem symbol (backlog-symbols entry)))

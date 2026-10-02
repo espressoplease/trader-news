@@ -50,18 +50,18 @@
     head.appendChild(title); head.appendChild(reset); panel.appendChild(head);
     var entries = payload && Array.isArray(payload.articles) ? payload.articles : [];
     var note = document.createElement('p'); note.className = 'company-articles-note';
-    note.textContent = entries.length ? entries.length + ' tagged article' + (entries.length === 1 ? '' : 's') + ', including queued links.' : 'No tagged articles yet for this company.';
+    note.textContent = entries.length ? entries.length + ' company article' + (entries.length === 1 ? '' : 's') + '.' : 'No company articles yet.';
     panel.appendChild(note);
     entries.forEach(function (article) {
       var row = document.createElement('article'), link = document.createElement('a'), meta = document.createElement('div');
       row.className = 'company-article'; link.href = article.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = article.title;
-      meta.className = 'company-article-meta'; meta.textContent = [article.source, article.status, article.time ? new Date(article.time * 1000).toLocaleDateString() : ''].filter(Boolean).join(' · ');
+      meta.className = 'company-article-meta'; meta.textContent = [article.source, article.time ? new Date(article.time * 1000).toLocaleDateString() : ''].filter(Boolean).join(' · ');
       row.appendChild(link); row.appendChild(meta); panel.appendChild(row);
     });
   }
   function showCompanyArticles(entity) {
     var panel = el('company-articles'), box = el('bigbox'); if (!panel || !box) return;
-    box.classList.add('is-company-filtered'); panel.textContent = 'Loading tagged articles…';
+    box.classList.add('is-company-filtered'); panel.textContent = 'Loading company articles…';
     var token = ++state.articleToken;
     fetch('/articles.json?symbol=' + encodeURIComponent(entity.symbol) + '&limit=100', {credentials:'same-origin'})
       .then(function (response) { if (!response.ok) throw Error(String(response.status)); return response.json(); })
