@@ -109,8 +109,8 @@ a:visited { color:#828282; text-decoration:none; }
 .market-column-sort.is-active { font-weight:bold; }
 .market-legend-price, .market-legend-move, .market-legend-cap, .market-legend-pe, .market-legend-yield { text-align:right; }
 .market-constituent-scroll { margin-top:6px; max-height:320px; overflow:auto; }
-.market-constituents { display:grid; gap:3px; grid-template-columns:1fr; margin-top:4px; }
-.market-constituent { align-items:center; background:var(--market-row-bg,transparent); color:var(--market-row-ink,#555); font-size:10px; min-height:30px; padding:3px 4px; }
+.market-constituents { display:grid; gap:1px; grid-template-columns:1fr; margin-top:4px; }
+.market-constituent { align-items:center; background:var(--market-row-bg,transparent); color:var(--market-row-ink,#555); font-size:10px; min-height:26px; padding:0 4px; }
 .market-constituent > span { color:inherit; }
 .market-constituent.is-selected { box-shadow:inset 2px 0 0 var(--market-accent); }
 .market-constituent-ident { align-items:center; display:flex; font-size:12px; gap:7px; min-width:0; overflow:hidden; white-space:nowrap; }
