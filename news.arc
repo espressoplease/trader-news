@@ -2961,6 +2961,9 @@
                parts       (unless del (keep cansee:item i!parts))
                poll        (if (in i!type 'pollopt) i!parent)
                score       (unless del (if (cansee-score i) (scoreof i)))
+               source      (unless del i!source)
+               symbols     (unless del (or i!symbols 'empty))
+               tags        (unless del (or i!tags 'empty))
                text        (unless del (check i!text ~empty))
                time        i!time
                title       (unless del (check i!title ~empty))

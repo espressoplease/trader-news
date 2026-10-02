@@ -33,6 +33,11 @@ const cleanEntries = entries.map((entry, index) => {
   const title = String(entry.title || "").trim();
   const url = String(entry.url || "").trim();
   const source = String(entry.source || "").trim();
+  if (!Array.isArray(entry.symbols || []) || !Array.isArray(entry.tags || [])) {
+    throw new Error(`Entry ${index + 1} symbols and tags must be arrays.`);
+  }
+  const symbols = [...new Set((entry.symbols || []).map((value) => String(value).trim().toUpperCase()).filter(Boolean))];
+  const tags = [...new Set((entry.tags || []).map((value) => String(value).trim().toLowerCase()).filter(Boolean))];
 
   if (!title || !url) {
     throw new Error(`Entry ${index + 1} needs a title and URL.`);
@@ -54,18 +59,19 @@ const cleanEntries = entries.map((entry, index) => {
     throw new Error(`Entry ${index + 1} duplicates an earlier URL.`);
   }
   seen.add(key);
-  return { title, url, source };
+  return { title, url, source, symbols, tags };
 });
 
 const arcString = (value) => JSON.stringify(value);
+const arcList = (values) => values.length ? `(list ${values.map(arcString).join(" ")})` : "nil";
 const program = [
   '(load "news.arc")',
   '(ensure-newsdirs)',
   '(ensure-market-backlog)',
   '(prn (+ "stored-before=" (len market-backlog*)))',
   ...cleanEntries.map(
-    ({ title, url, source }) =>
-      `(backlog-add ${arcString(title)} ${arcString(url)} ${arcString(source)})`,
+    ({ title, url, source, symbols, tags }) =>
+      `(backlog-add ${arcString(title)} ${arcString(url)} ${arcString(source)} ${arcList(symbols)} ${arcList(tags)})`,
   ),
   '(prn (+ "stored-after=" (len market-backlog*)))',
   '(prn (+ "pending=" (len:backlog-pending)))',

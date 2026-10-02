@@ -2,7 +2,7 @@
 (function () {
   var markets = window.FINANCE_MARKETS || [];
   var ranges = { '1d':'1D', '5d':'5D', '1mo':'1M', '3mo':'3M', '6mo':'6M', 'ytd':'YTD', '1y':'1Y', '5y':'5Y' };
-  var byKey = {}, state = { market:null, entity:null, range:'1d', filter:'all', sort:'move', sortDirection:'desc', token:0, feeds:{}, quotes:{}, quotePromise:null };
+  var byKey = {}, state = { market:null, entity:null, range:'1d', filter:'all', sort:'move', sortDirection:'desc', token:0, articleToken:0, feeds:{}, quotes:{}, quotePromise:null };
   var pollTimer, visible = !document.hidden;
   markets.forEach(function (market) { byKey[market.key] = market; });
   var viewStorageKey = 'trader-news.market-view.v1';
@@ -19,6 +19,50 @@
   }
   function el(id) { return document.getElementById(id); }
   function text(id, value) { var node = el(id); if (node) node.textContent = value; }
+  function setupNewsLayout() {
+    if (location.pathname !== '/' && location.pathname !== '/news') return;
+    var main = el('hnmain'), strip = el('market-strip');
+    if (!main || !strip || !main.parentNode) return;
+    var layout = document.createElement('div'), marketPane = document.createElement('aside'), newsPane = document.createElement('main');
+    layout.className = 'trader-layout'; marketPane.className = 'trader-market-pane'; newsPane.className = 'trader-news-pane';
+    main.parentNode.insertBefore(layout, main); layout.appendChild(marketPane); layout.appendChild(newsPane);
+    marketPane.appendChild(strip); newsPane.appendChild(main);
+    var feedCell = document.querySelector('#bigbox > td');
+    if (!feedCell) return;
+    var panel = document.createElement('section'); panel.id = 'company-articles'; panel.className = 'company-articles';
+    panel.setAttribute('aria-live', 'polite'); feedCell.insertBefore(panel, feedCell.firstChild);
+  }
+  function renderArticles(entity, payload) {
+    var panel = el('company-articles'); if (!panel) return;
+    panel.innerHTML = '';
+    var head = document.createElement('div'), title = document.createElement('h2'), reset = document.createElement('button');
+    head.className = 'company-articles-head'; title.textContent = 'News for ' + (entity.companyName || entity.name) + ' (' + entity.symbol + ')';
+    reset.type = 'button'; reset.textContent = 'All news'; reset.addEventListener('click', function () { if (state.market) loadMarket(state.market); });
+    head.appendChild(title); head.appendChild(reset); panel.appendChild(head);
+    var entries = payload && Array.isArray(payload.articles) ? payload.articles : [];
+    var note = document.createElement('p'); note.className = 'company-articles-note';
+    note.textContent = entries.length ? entries.length + ' tagged article' + (entries.length === 1 ? '' : 's') + ', including queued links.' : 'No tagged articles yet for this company.';
+    panel.appendChild(note);
+    entries.forEach(function (article) {
+      var row = document.createElement('article'), link = document.createElement('a'), meta = document.createElement('div');
+      row.className = 'company-article'; link.href = article.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = article.title;
+      meta.className = 'company-article-meta'; meta.textContent = [article.source, article.status, article.time ? new Date(article.time * 1000).toLocaleDateString() : ''].filter(Boolean).join(' · ');
+      row.appendChild(link); row.appendChild(meta); panel.appendChild(row);
+    });
+  }
+  function showCompanyArticles(entity) {
+    var panel = el('company-articles'), box = el('bigbox'); if (!panel || !box) return;
+    box.classList.add('is-company-filtered'); panel.textContent = 'Loading tagged articles…';
+    var token = ++state.articleToken;
+    fetch('/articles.json?symbol=' + encodeURIComponent(entity.symbol) + '&limit=100', {credentials:'same-origin'})
+      .then(function (response) { if (!response.ok) throw Error(String(response.status)); return response.json(); })
+      .then(function (payload) { if (token === state.articleToken) renderArticles(entity, payload); })
+      .catch(function () { if (token === state.articleToken) panel.textContent = 'Articles are temporarily unavailable.'; });
+  }
+  function showGeneralArticles() {
+    state.articleToken++;
+    var box = el('bigbox'); if (box) box.classList.remove('is-company-filtered');
+  }
   function clean(points) { return (points || []).filter(function (p) { return p && finite(p.ts) && finite(p.close); }).map(function (p) { return {ts:+p.ts, close:+p.close}; }); }
   function finite(value) { return typeof value === 'number' && Number.isFinite(value); }
   function number(value) { return finite(value) ? Number(value).toLocaleString(undefined, {maximumFractionDigits:2}) : 'n/a'; }
@@ -224,6 +268,7 @@
   }
   function selectEntity(entity) {
     state.entity = entity; saveView(); state.token++; var token = state.token; el('market-detail').className = 'market-detail';
+    if (entity.type === 'company') showCompanyArticles(entity); else showGeneralArticles();
     var companyPanel = el('market-company-detail'); document.querySelector('.market-detail-grid').classList.toggle('company-selected', entity.type === 'company');
     if (companyPanel) {
       companyPanel.className = companyPanel.className.replace(/\bnoshow\b/g, '') + (entity.type === 'company' ? '' : ' noshow');
@@ -268,7 +313,7 @@
     }, delay === undefined ? 120000 + Math.random() * 60000 : delay);
   }
   function init() {
-    if (!el('market-strip') || !markets.length) return; createRail();
+    if (!el('market-strip') || !markets.length) return; setupNewsLayout(); createRail();
     Object.keys(ranges).forEach(function (range) { var button = el('market-range-' + range); if (button) button.addEventListener('click', function () { state.range = range; selectEntity(state.entity); renderRows([]); updateRows(false); }); });
     ['all','gainers','losers'].forEach(function (filter) { var button = el('market-filter-' + filter); if (button) button.addEventListener('click', function () { state.filter = filter; saveView(); document.querySelectorAll('.market-filter').forEach(function (b) { b.className = b.className.replace(/\bis-selected\b/g, '') + (b === button ? ' is-selected' : ''); }); updateRows(false); }); });
     el('market-constituent-search').addEventListener('input', function () { saveView(); updateRows(false); });

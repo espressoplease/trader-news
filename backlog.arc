@@ -110,6 +110,7 @@
 (= market-backlog-file* (+ newsdir* "backlog")
    market-backlog-published-file* (+ newsdir* "backlog-published")
    market-backlog-last-file* (+ newsdir* "backlog-last-published")
+   market-article-tags-file* (+ newsdir* "article-tags")
    market-backlog-author* "marketbot"
    market-backlog-initial-count* 20
    market-backlog-drip-secs* (* 40 min*)
@@ -123,12 +124,31 @@
 
 (diskvar market-backlog* market-backlog-file* market-backlog-seed*)
 (disktable market-backlog-published* market-backlog-published-file*)
+(disktable market-article-tags* market-article-tags-file*)
 (diskvar market-backlog-last-published* market-backlog-last-file* 0)
 
 (def backlog-title (entry) (car entry))
 (def backlog-url (entry) (cadr entry))
-(def backlog-source (entry) (or (caddr entry) ""))
+(def backlog-source (entry) (or (entry 2) ""))
 (def backlog-key (entry) (canonical-url:backlog-url entry))
+(def backlog-symbols (entry)
+  (or (car (market-article-tags* (backlog-key entry))) nil))
+(def backlog-tags (entry)
+  (or (cadr (market-article-tags* (backlog-key entry))) nil))
+
+(def backlog-save-tags (url symbols tags)
+  (when (or symbols tags)
+    (let key (canonical-url url)
+      (let old (market-article-tags* key)
+        (= (market-article-tags* key)
+           (list (dedup (+ (or (car old) nil) (or symbols nil)))
+                 (dedup (+ (or (cadr old) nil) (or tags nil)))))
+        (todisk market-article-tags*)
+        (whenlet id (market-backlog-published* key)
+          (whenlet story (item id)
+            (= story!symbols (car (market-article-tags* key))
+               story!tags (cadr (market-article-tags* key)))
+            (save-item story)))))))
 
 (def ensure-market-backlog ()
   (unless (file-exists market-backlog-file*)
@@ -146,10 +166,11 @@
 
 ; This is the intended automation entrypoint for a future agent or a REPL.
 ; It writes immediately, and a duplicate URL is ignored rather than queued twice.
-(def backlog-add (title url (o source ""))
+(def backlog-add (title url (o source "") (o symbols nil) (o tags nil))
   (unless (and (~blank title) (valid-url url))
     (err "Backlog entries need a title and a valid URL."))
   (w/lock market-backlog-lock*
+    (backlog-save-tags url symbols tags)
     (unless (backlog-known-url url)
       (push (list title url source) market-backlog*)
       (todisk market-backlog*))
@@ -158,6 +179,54 @@
 (def backlog-pending ()
   (rem (fn (entry) (market-backlog-published* (backlog-key entry)))
        market-backlog*))
+
+; Public, read-only coverage for the site and research agents. Counts describe
+; curated backlog entries, including links waiting to be published.
+(def backlog-article-result (entry)
+  (let id (market-backlog-published* (backlog-key entry))
+    (let story (and id (item id))
+      (when (or (no id) (and story (shown story)))
+        (obj id id
+             title (backlog-title entry)
+             url (backlog-url entry)
+             source (backlog-source entry)
+             symbols (or (backlog-symbols entry) 'empty)
+             tags (or (backlog-tags entry) 'empty)
+             status (if id "published" "queued")
+             time (and story story!time))))))
+
+(def backlog-article-matches (entry symbol query)
+  (and (or (no symbol) (mem symbol (backlog-symbols entry)))
+       (or (no query)
+           (findsubseq query (downcase (backlog-title entry)))
+           (findsubseq query (downcase (backlog-source entry)))
+           (findsubseq query (downcase (backlog-url entry)))
+           (some [findsubseq query (downcase _)] (backlog-symbols entry)))))
+
+(def article-index-data (symbol query limit)
+  (with (articles nil symbol-counts (table) tag-counts (table))
+    (each entry market-backlog*
+      (each s (backlog-symbols entry)
+        (= (symbol-counts s) (+ 1 (or (symbol-counts s) 0))))
+      (each tag (backlog-tags entry)
+        (= (tag-counts tag) (+ 1 (or (tag-counts tag) 0))))
+      (when (and (< (len articles) limit)
+                 (backlog-article-matches entry symbol query))
+        (whenlet article (backlog-article-result entry)
+          (push article articles))))
+    (obj total (len market-backlog*)
+         count (len articles)
+         symbolCounts symbol-counts
+         tagCounts tag-counts
+         articles (or (rev articles) 'empty))))
+
+(newsopr articles.json ()
+  (let symbol (and arg!symbol (upcase arg!symbol))
+    (let query (and arg!q (downcase arg!q))
+      (let limit (min 100 (or (safe-posint arg!limit) 30))
+        (responding type-header*!json
+          (prn)
+          (prjson (article-index-data symbol query limit)))))))
 
 (def random-backlog-entries (n entries)
   (if (or (<= n 0) (no entries))
@@ -173,7 +242,10 @@
                       'title (process-title (backlog-title entry))
                       'by (user-id market-backlog-author*)
                       'ip "market-backlog"
-                      'keys (list 'backlog))
+                      'keys (list 'backlog)
+                      'symbols (backlog-symbols entry)
+                      'tags (backlog-tags entry)
+                      'source (backlog-source entry))
     (= (items* s!id) s)
     (save-item s)
     (register-story s)
