@@ -20,32 +20,41 @@ async function get(path) {
   return JSON.parse(stdout);
 }
 
-const quoteResults = await Promise.allSettled(markets.map(async (market) => {
-  const payload = await get(`/market-quotes?market=${encodeURIComponent(market.key)}&range=1d`);
-  const names = new Map(market.constituents.map(([symbol, name]) => [symbol, name]));
-  return (payload.entries || []).map((quote) => ({
-    symbol: quote.symbol,
-    name: names.get(quote.symbol) || quote.symbol,
-    market: market.name,
-    changePct: quote.dayChangePct,
-    asOf: quote.asOf,
-  }));
-}));
-
 const failures = [];
-const bySymbol = new Map();
-quoteResults.forEach((result, index) => {
-  if (result.status === "rejected") { failures.push(`${markets[index].name}: ${result.reason.message}`); return; }
-  result.value.forEach((quote) => {
-    if (bySymbol.has(quote.symbol)) return;
-    bySymbol.set(quote.symbol, quote);
+async function quotesFor(range) {
+  const results = await Promise.allSettled(markets.map(async (market) => {
+    const payload = await get(`/market-quotes?market=${encodeURIComponent(market.key)}&range=${range}`);
+    const names = new Map(market.constituents.map(([symbol, name]) => [symbol, name]));
+    return (payload.entries || []).map((quote) => ({
+      symbol: quote.symbol,
+      name: names.get(quote.symbol) || quote.symbol,
+      market: market.name,
+      changePct: range === "1d" ? quote.dayChangePct : quote.periodChangePct,
+      asOf: quote.asOf,
+      ...(range === "1d" ? {} : { coverage: quote.coverage }),
+    }));
+  }));
+  const bySymbol = new Map();
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      failures.push(`${markets[index].name} ${range}: ${result.reason.message}`);
+      return;
+    }
+    result.value.forEach((quote) => {
+      if (!bySymbol.has(quote.symbol)) bySymbol.set(quote.symbol, quote);
+    });
   });
-});
+  return bySymbol;
+}
+
+const [dailyQuotes, monthlyQuotes, sixMonthQuotes] = await Promise.all(
+  ["1d", "1mo", "6mo"].map(quotesFor));
 
 const now = Date.now() / 1000;
-const valid = [...bySymbol.values()].filter((quote) =>
+const fresh = (quote) =>
   Number.isFinite(quote.changePct) && Number.isFinite(quote.asOf) &&
-  quote.asOf <= now && now - quote.asOf < 4 * 86400);
+  quote.asOf <= now && now - quote.asOf < 4 * 86400;
+const valid = [...dailyQuotes.values()].filter(fresh);
 valid.sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct));
 const movers = valid.slice(0, 12);
 const quietPool = valid.slice(12).sort((a, b) => Math.abs(a.changePct) - Math.abs(b.changePct))
@@ -59,14 +68,43 @@ for (let i = quietPool.length - 1; i > 0; i--) {
 }
 const quiet = quietPool.slice(0, 6);
 
-const covered = await Promise.allSettled([...movers, ...quiet].map(async (quote) => {
+function rankedPeriod(quotes) {
+  return [...quotes.values()].filter((quote) => fresh(quote) && quote.coverage?.complete)
+    .sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct))
+    .map(({ coverage, ...quote }) => quote);
+}
+const oneMonthRanked = rankedPeriod(monthlyQuotes);
+const sixMonthRanked = rankedPeriod(sixMonthQuotes);
+const oneMonthMovers = oneMonthRanked.slice(0, 12);
+const sixMonthMovers = sixMonthRanked.slice(0, 12);
+const chosen = new Set([...movers, ...quiet].map(({ symbol }) => symbol));
+function rotatingPick(ranked, count, salt, horizon) {
+  const pool = ranked.slice(0, 30).filter(({ symbol }) => !chosen.has(symbol));
+  if (!pool.length) return [];
+  const picked = [];
+  const start = (seed + salt) % pool.length;
+  for (let i = 0; i < pool.length && picked.length < count; i++) {
+    const quote = pool[(start + i) % pool.length];
+    if (chosen.has(quote.symbol)) continue;
+    chosen.add(quote.symbol);
+    picked.push({ ...quote, horizon });
+  }
+  return picked;
+}
+const trendFocus = [
+  ...rotatingPick(oneMonthRanked, 3, 0, "1mo"),
+  ...rotatingPick(sixMonthRanked, 2, 17, "6mo"),
+];
+const researchTargets = [...movers, ...quiet, ...trendFocus];
+const covered = await Promise.allSettled(researchTargets.map(async (quote) => {
   const payload = await get(`/articles.json?symbol=${encodeURIComponent(quote.symbol)}&limit=5`);
   return { ...quote, articleCount: payload.symbolcounts?.[quote.symbol] || 0,
     recentArticles: (payload.articles || []).map(({ title, url, status }) => ({ title, url, status })) };
 }));
 const selected = covered.map((result, index) => result.status === "fulfilled" ? result.value : {
-  ...[...movers, ...quiet][index], articleCount: null, recentArticles: [], coverageError: result.reason.message,
+  ...researchTargets[index], articleCount: null, recentArticles: [], coverageError: result.reason.message,
 });
 
-console.log(JSON.stringify({ date: day, base: base.href, quoted: bySymbol.size, usable: valid.length,
-  failures, movers: selected.slice(0, movers.length), quiet: selected.slice(movers.length) }, null, 2));
+console.log(JSON.stringify({ date: day, base: base.href, quoted: dailyQuotes.size, usable: valid.length,
+  failures, movers: selected.slice(0, movers.length), quiet: selected.slice(movers.length, movers.length + quiet.length),
+  oneMonthMovers, sixMonthMovers, trendFocus: selected.slice(movers.length + quiet.length) }, null, 2));

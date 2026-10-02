@@ -49,6 +49,12 @@ companies by absolute daily percentage change and samples six quieter names
 from the lower half of the remaining valid moves. The daily sample is
 deterministic so a rerun investigates the same companies. It reports quote
 timestamps, prior article counts and a few existing titles for each company.
+The brief also ranks the 12 largest absolute one-month and six-month moves
+using complete chart coverage and recent quotes. It selects five additional,
+distinct companies from the leading 30 in those rankings: three from one month
+and two from six months. This focus rotates by day. Each focus entry includes
+its time window, percentage change, quote timestamp and existing article
+coverage.
 
 Give cheap research subagents small batches of these companies with ticker,
 company name, move and existing coverage. They should search recent primary
@@ -58,3 +64,10 @@ does not prove a cause; link an event to the move only when the reporting and
 timing support it. Import one consolidated JSON batch so the live service is
 stopped and restarted only once. Keep the broad economics and market editorial
 queue alongside company research.
+
+For the five longer-window companies, search for substantive reporting on the
+business and sector trends behind the move, including competitors, demand,
+pricing, regulation or capital spending where relevant. A trend article can
+carry a company symbol when it materially covers that company; broader pieces
+without a meaningful company connection belong in the general queue. Avoid
+repeating a price-move roundup that adds no explanation.
