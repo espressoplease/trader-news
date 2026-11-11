@@ -157,6 +157,13 @@
             (save-item story)))))))
 
 (def ensure-market-backlog ()
+  ; CLI import processes must load durable accounts before checking the author.
+  ; Otherwise an empty process can overwrite hpw/uids with just marketbot.
+  (load-userinfo)
+  (when (and (readenv "MARKET_BACKLOG_IMPORT" nil)
+             (or (no (acct-exists market-backlog-author*))
+                 (no (lookup-uid market-backlog-author*))))
+    (err "Start the news server to initialize the publishing account before importing."))
   (unless (file-exists market-backlog-file*)
     (todisk market-backlog*))
   (unless (acct-exists market-backlog-author*)

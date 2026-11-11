@@ -82,7 +82,7 @@ const result = spawnSync("./sharc", [], {
   cwd: root,
   input: `${program}\n`,
   encoding: "utf8",
-  env: process.env,
+  env: {...process.env, MARKET_BACKLOG_IMPORT: "1"},
 });
 
 if (result.error) {

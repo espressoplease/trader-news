@@ -503,13 +503,16 @@
 (or= good-logins* (queue) bad-logins* (queue))
 
 (def good-login (user pw ip)
-  (let record (list (seconds) ip user)
+  ; Registration already reserves names case-insensitively. Resolve login
+  ; spelling to the stored account too, including password-manager autofill.
+  (let user (or (and user (username-conflicts user)) user)
+   (let record (list (seconds) ip user)
     (if (check-pw user pw)
         (do (unless (user-cookie user) (cook-user! user))
             (enq-limit record good-logins*)
             user)
         (do (enq-limit record bad-logins*)
-            nil))))
+            nil)))))
 
 (def bad-newacct (user pw)
   (if (and (recaptcha-required)
